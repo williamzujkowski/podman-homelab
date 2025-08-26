@@ -1,0 +1,58 @@
+---
+# Configure Podman system settings
+
+- name: Configure containers.conf
+  ansible.builtin.template:
+    src: containers.conf.j2
+    dest: /etc/containers/containers.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+  notify: Restart podman
+
+- name: Configure storage.conf
+  ansible.builtin.template:
+    src: storage.conf.j2
+    dest: /etc/containers/storage.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+
+- name: Configure Podman default network
+  ansible.builtin.template:
+    src: podman-default-network.json.j2
+    dest: /etc/containers/networks/podman.json
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  when: false  # Disabled by default, Podman creates its own
+
+- name: Set up sysctl parameters for containers
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+  loop:
+    - { name: "net.ipv4.ip_forward", value: "1" }
+    - { name: "net.ipv4.conf.all.forwarding", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+    - { name: "user.max_user_namespaces", value: "28633" }
+  become: yes
+  when: item.name != "net.bridge.bridge-nf-call-iptables" and item.name != "net.bridge.bridge-nf-call-ip6tables"
+        or (ansible_facts['kernel'] is version('3.18', '>='))
+
+- name: Enable and start Podman socket
+  ansible.builtin.systemd:
+    name: podman.socket
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes

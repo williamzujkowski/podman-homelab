@@ -1,0 +1,171 @@
+---
+# Ingress deployment playbook
+- name: Deploy ingress controller
+  hosts: ingress
+  gather_facts: yes
+  become: yes
+  serial: "{{ serial | default(1) }}"
+
+  pre_tasks:
+    - name: Check Podman deployment
+      ansible.builtin.stat:
+        path: /etc/ansible/facts.d/podman.fact
+      register: podman_check
+
+    - name: Fail if Podman not deployed
+      ansible.builtin.fail:
+        msg: "Podman not deployed. Run 20-podman.yml first."
+      when: not podman_check.stat.exists
+
+    - name: Create Caddy directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /etc/caddy
+        - /etc/caddy/sites
+        - /var/www/html
+
+  tasks:
+    - name: Deploy main Caddyfile
+      ansible.builtin.copy:
+        content: |
+          {
+              admin localhost:2019
+              auto_https off
+          }
+          
+          # Import site configs
+          import /etc/caddy/sites/*.caddy
+          
+          # Default site
+          :80 {
+              root * /var/www/html
+              file_server
+              
+              handle /metrics {
+                  reverse_proxy {{ hostvars['vm-a']['ansible_host'] }}:9090
+              }
+              
+              handle /grafana* {
+                  reverse_proxy {{ hostvars['vm-a']['ansible_host'] }}:3000
+              }
+              
+              handle /prometheus* {
+                  reverse_proxy {{ hostvars['vm-a']['ansible_host'] }}:9090
+              }
+              
+              handle /loki* {
+                  reverse_proxy {{ hostvars['vm-a']['ansible_host'] }}:3100
+              }
+              
+              handle {
+                  respond "Homelab Ingress Controller" 200
+              }
+          }
+        dest: /etc/caddy/Caddyfile
+        mode: '0644'
+      notify: Reload caddy
+
+    - name: Create index.html
+      ansible.builtin.copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Homelab Dashboard</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; }
+                  h1 { color: #333; }
+                  .services { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+                  .service { padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+                  .service h2 { margin-top: 0; color: #555; }
+                  a { color: #0066cc; text-decoration: none; }
+                  a:hover { text-decoration: underline; }
+              </style>
+          </head>
+          <body>
+              <h1>Homelab Services</h1>
+              <div class="services">
+                  <div class="service">
+                      <h2>Monitoring</h2>
+                      <p><a href="/prometheus">Prometheus</a></p>
+                      <p><a href="/grafana">Grafana</a></p>
+                  </div>
+                  <div class="service">
+                      <h2>Logging</h2>
+                      <p><a href="/loki">Loki API</a></p>
+                  </div>
+                  <div class="service">
+                      <h2>Metrics</h2>
+                      <p><a href="/metrics">Node Metrics</a></p>
+                  </div>
+              </div>
+          </body>
+          </html>
+        dest: /var/www/html/index.html
+        mode: '0644'
+
+    - name: Copy Caddy Quadlet definition
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../quadlet/caddy.container"
+        dest: /etc/containers/systemd/caddy.container
+        mode: '0644'
+
+    - name: Create Caddy volumes
+      containers.podman.podman_volume:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - caddy-data
+        - caddy-config
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Start and enable Caddy service
+      ansible.builtin.systemd:
+        name: caddy.service
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Reload caddy
+      ansible.builtin.systemd:
+        name: caddy.service
+        state: reloaded
+
+  post_tasks:
+    - name: Wait for Caddy to be healthy
+      ansible.builtin.wait_for:
+        port: 80
+        host: "{{ ansible_host }}"
+        timeout: 60
+        state: started
+
+    - name: Test ingress endpoints
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}{{ item }}"
+        method: GET
+        status_code: [200, 301, 302]
+      loop:
+        - "/"
+        - "/prometheus"
+        - "/grafana"
+      register: endpoint_tests
+      failed_when: false
+
+    - name: Display ingress information
+      ansible.builtin.debug:
+        msg: |
+          Ingress deployed successfully!
+          
+          Main URL: http://{{ ansible_host }}
+          
+          Service Routes:
+          - http://{{ ansible_host }}/prometheus
+          - http://{{ ansible_host }}/grafana
+          - http://{{ ansible_host }}/loki
+          - http://{{ ansible_host }}/metrics

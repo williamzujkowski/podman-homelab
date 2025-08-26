@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# Podman auto-update timer override
+
+[Timer]
+OnCalendar=
+OnCalendar={{ podman_auto_update_timer }}
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

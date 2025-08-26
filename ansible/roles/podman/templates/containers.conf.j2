@@ -1,0 +1,68 @@
+# {{ ansible_managed }}
+# Podman containers configuration
+
+[containers]
+# Container runtime
+default_capabilities = [
+  "CHOWN",
+  "DAC_OVERRIDE",
+  "FOWNER",
+  "FSETID",
+  "KILL",
+  "NET_BIND_SERVICE",
+  "SETFCAP",
+  "SETGID",
+  "SETPCAP",
+  "SETUID",
+]
+
+# Logging
+log_driver = "{{ podman_log_driver }}"
+log_size_max = "{{ podman_log_size_max }}"
+log_tag = "{{ podman_log_tag }}"
+
+# Process limits
+pids_limit = {{ podman_pids_limit }}
+
+# Security
+seccomp_profile = "{{ podman_seccomp_profile }}"
+{% if podman_apparmor_enabled %}
+apparmor_profile = "container-default"
+{% endif %}
+
+# cgroup configuration
+cgroups = "enabled"
+cgroupns = "private"
+
+# Network
+default_network = "{{ podman_default_network }}"
+
+[engine]
+# Engine configuration
+cgroup_manager = "{{ podman_cgroup_manager }}"
+events_logger = "{{ podman_events_logger }}"
+runtime = "crun"
+network_backend = "{{ podman_network_backend }}"
+
+# Pull policy
+pull_policy = "missing"
+
+# Restart policy
+stop_timeout = {{ podman_systemd_timeout_stop_sec }}
+
+# Resource limits
+enable_port_reservation = {{ podman_enable_port_reservation | lower }}
+
+[network]
+# Network configuration
+default_subnet = "10.88.0.0/16"
+default_subnet_pools = [
+  {"base" = "10.89.0.0/16", "size" = 24},
+  {"base" = "10.90.0.0/16", "size" = 24},
+]
+
+[machine]
+# Machine configuration
+cpus = 2
+disk_size = 100
+memory = 2048

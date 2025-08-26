@@ -1,0 +1,31 @@
+#cloud-config
+users:
+  - default
+  - name: ubuntu
+    groups: sudo, docker
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDxxxxx ubuntu@homelab # Replace with your actual key
+
+package_update: true
+package_upgrade: false
+packages:
+  - python3
+  - python3-pip
+  - python3-apt
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - net-tools
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common
+
+runcmd:
+  - echo "Ubuntu staging VM provisioned" > /etc/motd
+  - systemctl start ssh
+  - systemctl enable ssh

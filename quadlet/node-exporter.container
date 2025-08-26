@@ -1,0 +1,34 @@
+[Unit]
+Description=Prometheus Node Exporter
+After=network-online.target
+
+[Container]
+Image=docker.io/prom/node-exporter:v1.7.0@sha256:cf2a79f6301c7574e963c3eb8f28a86e5a396f5f0e60a3f11b7a3f1e4a3b1e3f
+ContainerName=node-exporter
+PublishPort=9100:9100
+PodmanArgs=--pid=host
+Network=host
+Environment=TZ=UTC
+Label=io.containers.autoupdate=registry
+HealthCmd=wget --no-verbose --tries=1 --spider http://localhost:9100/metrics || exit 1
+HealthInterval=30s
+HealthRetries=3
+HealthStartPeriod=10s
+HealthTimeout=3s
+User=65534
+Exec=--path.procfs=/host/proc \
+      --path.sysfs=/host/sys \
+      --path.rootfs=/host \
+      --collector.filesystem.mount-points-exclude="^/(dev|proc|sys|run|var/lib/docker/.+|var/lib/containers/storage/.+)($|/)" \
+      --collector.netclass.ignored-devices="^(veth.*|br.*|docker.*|virbr.*|lo)$"
+Volume=/proc:/host/proc:ro,rslave
+Volume=/sys:/host/sys:ro,rslave
+Volume=/:/host:ro,rbind
+
+[Service]
+Restart=always
+RestartSec=30
+TimeoutStopSec=70
+
+[Install]
+WantedBy=default.target

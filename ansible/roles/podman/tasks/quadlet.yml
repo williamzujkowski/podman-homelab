@@ -1,0 +1,39 @@
+---
+# Set up Quadlet directories and configuration
+
+- name: Create system Quadlet directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ podman_quadlet_dirs }}"
+  become: yes
+
+- name: Create user Quadlet directories
+  ansible.builtin.file:
+    path: "/home/{{ item }}/.config/containers/systemd"
+    state: directory
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0755'
+  loop: "{{ podman_rootless_users }}"
+  become: yes
+
+- name: Deploy example Quadlet unit
+  ansible.builtin.copy:
+    content: |
+      # Example Quadlet container unit
+      # Place your .container, .volume, .network, and .kube files here
+      # They will be automatically converted to systemd units
+    dest: /etc/containers/systemd/README
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Reload systemd daemon for Quadlet
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  become: yes

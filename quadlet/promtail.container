@@ -1,0 +1,27 @@
+[Unit]
+Description=Promtail Log Collector
+After=network-online.target loki.service
+
+[Container]
+Image=docker.io/grafana/promtail:2.9.3@sha256:bb919ad95e6cbdf14e2b37f922fd87e25ab6982f1e7a491e0e5cf5e8ba3a3e8f
+ContainerName=promtail
+Volume=/etc/promtail:/etc/promtail:ro,Z
+Volume=/var/log/journal:/var/log/journal:ro
+Volume=/run/log/journal:/run/log/journal:ro
+Volume=/etc/machine-id:/etc/machine-id:ro
+Environment=TZ=UTC
+Label=io.containers.autoupdate=registry
+HealthCmd=wget --no-verbose --tries=1 --spider http://localhost:9080/ready || exit 1
+HealthInterval=30s
+HealthRetries=3
+HealthStartPeriod=30s
+HealthTimeout=3s
+Exec=-config.file=/etc/promtail/promtail-config.yaml
+
+[Service]
+Restart=always
+RestartSec=30
+TimeoutStopSec=70
+
+[Install]
+WantedBy=default.target

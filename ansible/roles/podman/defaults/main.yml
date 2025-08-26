@@ -1,0 +1,66 @@
+---
+# Podman role defaults
+
+# Podman installation
+podman_install_from_testing: false
+podman_install_method: "distro"  # distro or kubic
+
+# Rootless configuration
+podman_rootless_enabled: true
+podman_rootless_users:
+  - ubuntu
+  - william
+
+# System configuration
+podman_cgroup_manager: systemd
+podman_log_driver: journald
+podman_events_logger: journald
+
+# Network configuration
+podman_network_backend: netavark
+podman_default_network: podman
+
+# Storage configuration
+podman_storage_driver: overlay
+podman_storage_path: /var/lib/containers/storage
+podman_rootless_storage_path: "$HOME/.local/share/containers/storage"
+
+# Registries
+podman_registries:
+  - docker.io
+  - quay.io
+  - gcr.io
+  - ghcr.io
+
+podman_unqualified_search_registries:
+  - docker.io
+  - quay.io
+
+# Security
+podman_seccomp_profile: "/usr/share/containers/seccomp.json"
+podman_apparmor_enabled: true
+
+# Resource limits
+podman_pids_limit: 2048
+podman_enable_port_reservation: true
+
+# Quadlet configuration
+podman_quadlet_enabled: true
+podman_quadlet_dirs:
+  - /etc/containers/systemd
+  - /usr/share/containers/systemd
+podman_quadlet_user_dirs:
+  - "$HOME/.config/containers/systemd"
+
+# Auto-update configuration
+podman_auto_update_enabled: true
+podman_auto_update_timer: "daily"
+podman_auto_update_time: "02:00:00"
+
+# Systemd settings
+podman_systemd_restart_sec: 30
+podman_systemd_timeout_stop_sec: 70
+
+# Logging
+podman_log_size_max: "10m"
+podman_log_tag: "container-{{.Name}}"

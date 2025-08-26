@@ -1,0 +1,28 @@
+---
+# Podman role handlers
+
+- name: Restart podman
+  ansible.builtin.systemd:
+    name: podman.service
+    state: restarted
+    daemon_reload: yes
+  become: yes
+
+- name: Restart podman socket
+  ansible.builtin.systemd:
+    name: podman.socket
+    state: restarted
+    daemon_reload: yes
+  become: yes
+
+- name: Restart podman-auto-update timer
+  ansible.builtin.systemd:
+    name: podman-auto-update.timer
+    state: restarted
+    daemon_reload: yes
+  become: yes
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  become: yes

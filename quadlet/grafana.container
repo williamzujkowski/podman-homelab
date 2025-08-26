@@ -1,0 +1,30 @@
+[Unit]
+Description=Grafana Analytics and Monitoring
+After=network-online.target prometheus.service
+
+[Container]
+Image=docker.io/grafana/grafana:10.2.2@sha256:a57f03f09f76f88c5f9c9c1e16ab30e0f32b9ad87b0c2dc6d085b8c95c1f3e1f
+ContainerName=grafana
+Volume=grafana-data:/var/lib/grafana:Z
+Volume=/etc/grafana:/etc/grafana:ro,Z
+PublishPort=3000:3000
+Environment=GF_SECURITY_ADMIN_PASSWORD=admin
+Environment=GF_INSTALL_PLUGINS=
+Environment=GF_SERVER_ROOT_URL=http://localhost:3000
+Environment=GF_ANALYTICS_REPORTING_ENABLED=false
+Environment=TZ=UTC
+Label=io.containers.autoupdate=registry
+HealthCmd=wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+HealthInterval=30s
+HealthRetries=3
+HealthStartPeriod=30s
+HealthTimeout=3s
+User=472
+
+[Service]
+Restart=always
+RestartSec=30
+TimeoutStopSec=70
+
+[Install]
+WantedBy=default.target

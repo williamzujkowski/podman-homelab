@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+# Podman storage configuration
+
+[storage]
+driver = "{{ podman_storage_driver }}"
+runroot = "/run/containers/storage"
+graphroot = "{{ podman_storage_path }}"
+
+[storage.options]
+# Storage driver options
+{% if podman_storage_driver == "overlay" %}
+mount_program = "/usr/bin/fuse-overlayfs"
+mountopt = "nodev,metacopy=on"
+{% endif %}
+
+# Size
+size = ""
+
+# Additional image stores
+additionalimagestores = []
+
+# Automatic storage management
+pull_options = {enable_partial_images = "false", use_hard_links = "false", ostree_repos=""}

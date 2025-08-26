@@ -1,0 +1,41 @@
+---
+# Verify Podman installation
+
+- name: Check Podman version
+  ansible.builtin.command:
+    cmd: podman version
+  register: podman_version
+  changed_when: false
+  become: yes
+
+- name: Display Podman version
+  ansible.builtin.debug:
+    var: podman_version.stdout_lines
+
+- name: Test Podman functionality
+  ansible.builtin.command:
+    cmd: podman run --rm docker.io/library/hello-world
+  register: podman_test
+  changed_when: false
+  become: yes
+  failed_when: false
+
+- name: Check Podman system info
+  ansible.builtin.command:
+    cmd: podman system info --format json
+  register: podman_info
+  changed_when: false
+  become: yes
+
+- name: Verify Quadlet generator
+  ansible.builtin.command:
+    cmd: /usr/lib/systemd/system-generators/podman-system-generator --help
+  register: quadlet_check
+  changed_when: false
+  failed_when: false
+  become: yes
+
+- name: Set Podman installation fact
+  ansible.builtin.set_fact:
+    podman_installed: true
+    podman_version_info: "{{ podman_version.stdout_lines[0] if podman_version.stdout_lines else 'unknown' }}"

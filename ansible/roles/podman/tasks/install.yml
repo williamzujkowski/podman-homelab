@@ -1,0 +1,60 @@
+---
+# Install Podman and dependencies
+
+- name: Add Podman repository key (if using kubic)
+  ansible.builtin.get_url:
+    url: "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_{{ ansible_distribution_version }}/Release.key"
+    dest: /usr/share/keyrings/libcontainers-archive-keyring.gpg
+    mode: '0644'
+  become: yes
+  when: podman_install_method == "kubic"
+
+- name: Add Podman repository (if using kubic)
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ ansible_architecture }} signed-by=/usr/share/keyrings/libcontainers-archive-keyring.gpg]
+      https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_{{ ansible_distribution_version }}/
+      /
+    state: present
+    filename: libcontainers
+  become: yes
+  when: podman_install_method == "kubic"
+
+- name: Install Podman and related packages
+  ansible.builtin.apt:
+    name:
+      - podman
+      - podman-compose
+      - buildah
+      - skopeo
+      - containernetworking-plugins
+      - uidmap
+      - slirp4netns
+      - fuse-overlayfs
+      - crun
+      - netavark
+      - aardvark-dns
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Install additional container tools
+  ansible.builtin.apt:
+    name:
+      - jq
+      - iptables
+      - catatonit
+    state: present
+  become: yes
+
+- name: Create container directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/containers
+    - /etc/containers/systemd
+    - /etc/containers/registries.conf.d
+    - /usr/share/containers/systemd
+  become: yes

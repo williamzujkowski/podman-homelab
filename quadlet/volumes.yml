@@ -1,0 +1,40 @@
+---
+# Podman volume definitions for persistent storage
+# These are created via Ansible
+
+volumes:
+  - name: prometheus-data
+    driver: local
+    options:
+      o: "uid=65534,gid=65534"
+    labels:
+      service: prometheus
+      type: data
+
+  - name: grafana-data
+    driver: local
+    options:
+      o: "uid=472,gid=472"
+    labels:
+      service: grafana
+      type: data
+
+  - name: loki-data
+    driver: local
+    options:
+      o: "uid=10001,gid=10001"
+    labels:
+      service: loki
+      type: data
+
+  - name: caddy-data
+    driver: local
+    labels:
+      service: caddy
+      type: data
+
+  - name: caddy-config
+    driver: local
+    labels:
+      service: caddy
+      type: config

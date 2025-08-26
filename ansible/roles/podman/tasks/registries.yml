@@ -1,0 +1,44 @@
+---
+# Configure container registries
+
+- name: Configure registries.conf
+  ansible.builtin.template:
+    src: registries.conf.j2
+    dest: /etc/containers/registries.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+
+- name: Configure registry authentication (if needed)
+  ansible.builtin.copy:
+    content: |
+      {
+        "auths": {}
+      }
+    dest: /etc/containers/auth.json
+    owner: root
+    group: root
+    mode: '0600'
+  become: yes
+  when: false  # Enable when auth is needed
+
+- name: Configure policy.json for signature verification
+  ansible.builtin.copy:
+    content: |
+      {
+        "default": [
+          {
+            "type": "insecureAcceptAnything"
+          }
+        ],
+        "transports": {
+          "docker": {}
+        }
+      }
+    dest: /etc/containers/policy.json
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes

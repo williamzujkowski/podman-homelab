@@ -1,0 +1,34 @@
+# {{ ansible_managed }}
+# Container registries configuration
+
+unqualified-search-registries = {{ podman_unqualified_search_registries | to_json }}
+
+[[registry]]
+location = "docker.io"
+prefix = "docker.io"
+
+[[registry.mirror]]
+location = "mirror.gcr.io"
+
+[[registry]]
+location = "quay.io"
+prefix = "quay.io"
+
+[[registry]]
+location = "gcr.io"
+prefix = "gcr.io"
+
+[[registry]]
+location = "ghcr.io"
+prefix = "ghcr.io"
+
+# Short name aliases
+[aliases]
+"alpine" = "docker.io/library/alpine"
+"busybox" = "docker.io/library/busybox"
+"centos" = "quay.io/centos/centos"
+"debian" = "docker.io/library/debian"
+"fedora" = "quay.io/fedora/fedora"
+"nginx" = "docker.io/library/nginx"
+"redis" = "docker.io/library/redis"
+"ubuntu" = "docker.io/library/ubuntu"

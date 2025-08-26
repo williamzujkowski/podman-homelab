@@ -1,0 +1,26 @@
+---
+# Podman role main tasks
+
+- name: Install Podman and dependencies
+  ansible.builtin.include_tasks: install.yml
+
+- name: Configure Podman system settings
+  ansible.builtin.include_tasks: configure.yml
+
+- name: Set up rootless Podman
+  ansible.builtin.include_tasks: rootless.yml
+  when: podman_rootless_enabled
+
+- name: Configure container registries
+  ansible.builtin.include_tasks: registries.yml
+
+- name: Set up Quadlet directories
+  ansible.builtin.include_tasks: quadlet.yml
+  when: podman_quadlet_enabled
+
+- name: Configure auto-update
+  ansible.builtin.include_tasks: auto_update.yml
+  when: podman_auto_update_enabled
+
+- name: Verify Podman installation
+  ansible.builtin.include_tasks: verify.yml

@@ -1,0 +1,67 @@
+---
+# Podman deployment playbook
+- name: Deploy Podman container runtime
+  hosts: all
+  gather_facts: yes
+  become: yes
+  serial: "{{ serial | default(1) }}"
+
+  pre_tasks:
+    - name: Check base configuration
+      ansible.builtin.stat:
+        path: /etc/ansible/facts.d/base.fact
+      register: base_check
+
+    - name: Fail if base not configured
+      ansible.builtin.fail:
+        msg: "Base configuration not found. Run 10-base.yml first."
+      when: not base_check.stat.exists
+
+    - name: Display deployment target
+      ansible.builtin.debug:
+        msg: |
+          Deploying Podman to {{ inventory_hostname }}
+          Environment: {{ environment_name }}
+          Architecture: {{ arch }}
+
+  roles:
+    - podman
+
+  post_tasks:
+    - name: Verify Podman installation
+      ansible.builtin.command:
+        cmd: podman --version
+      register: podman_version_check
+      changed_when: false
+
+    - name: Verify Podman socket
+      ansible.builtin.systemd:
+        name: podman.socket
+        state: started
+      register: podman_socket_check
+      become: yes
+
+    - name: Check Quadlet generator
+      ansible.builtin.stat:
+        path: /usr/lib/systemd/system-generators/podman-system-generator
+      register: quadlet_check
+
+    - name: Display installation status
+      ansible.builtin.debug:
+        msg: |
+          Podman Version: {{ podman_version_check.stdout }}
+          Podman Socket: {{ 'Active' if podman_socket_check.state == 'started' else 'Inactive' }}
+          Quadlet Available: {{ quadlet_check.stat.exists }}
+
+    - name: Set Podman deployment fact
+      ansible.builtin.copy:
+        content: |
+          {
+            "podman_deployed": true,
+            "podman_deploy_date": "{{ ansible_date_time.iso8601 }}",
+            "podman_version": "{{ podman_version_check.stdout | regex_replace('.*version ', '') }}",
+            "quadlet_enabled": {{ quadlet_check.stat.exists | lower }}
+          }
+        dest: /etc/ansible/facts.d/podman.fact
+        mode: '0644'
+      become: yes

@@ -1,0 +1,63 @@
+---
+# Configure rootless Podman
+
+- name: Enable lingering for rootless users
+  ansible.builtin.command:
+    cmd: "loginctl enable-linger {{ item }}"
+  loop: "{{ podman_rootless_users }}"
+  become: yes
+  changed_when: false
+
+- name: Configure subuid for rootless users
+  ansible.builtin.lineinfile:
+    path: /etc/subuid
+    line: "{{ item }}:100000:65536"
+    create: yes
+    mode: '0644'
+  loop: "{{ podman_rootless_users }}"
+  become: yes
+
+- name: Configure subgid for rootless users
+  ansible.builtin.lineinfile:
+    path: /etc/subgid
+    line: "{{ item }}:100000:65536"
+    create: yes
+    mode: '0644'
+  loop: "{{ podman_rootless_users }}"
+  become: yes
+
+- name: Create XDG_RUNTIME_DIR for users
+  ansible.builtin.file:
+    path: "/run/user/{{ item_uid }}"
+    state: directory
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0700'
+  vars:
+    item_uid: "{{ ansible_facts.getent_passwd[item][1] }}"
+  loop: "{{ podman_rootless_users }}"
+  become: yes
+  when: ansible_facts.getent_passwd[item] is defined
+
+- name: Create user systemd directories
+  ansible.builtin.file:
+    path: "/home/{{ item }}/.config/systemd/user"
+    state: directory
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0755'
+  loop: "{{ podman_rootless_users }}"
+  become: yes
+
+- name: Enable podman.socket for rootless users
+  ansible.builtin.systemd:
+    name: podman.socket
+    enabled: yes
+    scope: user
+    daemon_reload: yes
+  become: yes
+  become_user: "{{ item }}"
+  loop: "{{ podman_rootless_users }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts.getent_passwd[item][1] }}"
+  when: ansible_facts.getent_passwd[item] is defined
