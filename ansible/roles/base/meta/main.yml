@@ -1,0 +1,19 @@
+---
+galaxy_info:
+  role_name: base
+  author: william
+  description: Base system configuration role for Pi homelab
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+  galaxy_tags:
+    - system
+    - security
+    - chrony
+    - ssh
+    - tailscale
+
+dependencies: []

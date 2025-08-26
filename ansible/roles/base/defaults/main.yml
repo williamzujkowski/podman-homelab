@@ -1,0 +1,85 @@
+---
+# Base role defaults
+
+# Users configuration
+base_users:
+  - name: william
+    groups:
+      - sudo
+      - docker
+    shell: /bin/bash
+    create_home: yes
+  - name: breakfix
+    groups:
+      - sudo
+    shell: /bin/bash
+    create_home: yes
+    comment: "Emergency break-glass account"
+
+# SSH configuration
+base_ssh_port: 22
+base_ssh_permit_root_login: "no"
+base_ssh_password_authentication: "no"
+base_ssh_pubkey_authentication: "yes"
+base_ssh_client_alive_interval: 60
+base_ssh_client_alive_count_max: 3
+
+# Chrony NTP configuration
+base_chrony_servers:
+  - server: time.cloudflare.com
+    options: "iburst nts"
+  - server: time.nist.gov
+    options: "iburst"
+  - server: ntp-a.nist.gov
+    options: "iburst"
+  - server: ntp-b.nist.gov
+    options: "iburst"
+
+base_chrony_makestep: "0.1 3"
+base_chrony_ntsdumpdir: "/var/lib/chrony"
+
+# Tailscale configuration
+base_tailscale_enabled: true
+base_tailscale_ssh_enabled: true
+base_tailscale_tags:
+  - "tag:homelab"
+
+# Unattended upgrades
+base_unattended_upgrades_enabled: true
+base_unattended_upgrades_auto_reboot: false
+base_unattended_upgrades_auto_reboot_time: "02:00"
+base_unattended_upgrades_mail: ""
+
+# System packages to install
+base_packages:
+  - vim
+  - htop
+  - curl
+  - wget
+  - git
+  - tmux
+  - jq
+  - net-tools
+  - dnsutils
+  - chrony
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+
+# Firewall configuration
+base_firewall_enabled: true
+base_firewall_default_policy: deny
+base_firewall_allowed_ports:
+  - port: 22
+    proto: tcp
+    comment: "SSH"
+  - port: 80
+    proto: tcp
+    comment: "HTTP"
+  - port: 443
+    proto: tcp
+    comment: "HTTPS"
+  - port: 9100
+    proto: tcp
+    comment: "Node Exporter"

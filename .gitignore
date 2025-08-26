@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+*.egg-info/
+
+# Ansible
+*.retry
+ansible/inventories/*/group_vars/all/vault.yml
+ansible/inventories/*/host_vars/*/vault.yml
+*.vault
+
+# Molecule
+molecule/*/.molecule/
+molecule/*/tests/__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Terraform (if used later)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Secrets
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.env
+.env.*
+
+# Logs
+*.log
+logs/
+
+# Backups
+*.bak
+*.backup
+*.old
+
+# System
+.directory
+Thumbs.db
+
+# CI artifacts
+.cache/
+htmlcov/
+coverage.xml
+*.cover
+.coverage
+.coverage.*
+
+# Project specific
+.claude-flow/
+.hive-mind/
+.swarm/
+deleteme

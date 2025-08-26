@@ -1,0 +1,103 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":pinAllExceptPeerDependencies",
+    ":automergePatch",
+    ":semanticCommits"
+  ],
+  "timezone": "UTC",
+  "schedule": ["after 10pm every weekday", "before 5am every weekday", "every weekend"],
+  "labels": ["renovate", "dependencies"],
+  "assignees": ["william"],
+  "prConcurrentLimit": 5,
+  "prCreation": "not-pending",
+  "semanticCommits": "enabled",
+  "docker": {
+    "enabled": true,
+    "pinDigests": true,
+    "automerge": false,
+    "major": {
+      "enabled": true
+    },
+    "minor": {
+      "enabled": true
+    },
+    "digest": {
+      "enabled": true,
+      "automerge": false,
+      "prCreation": "immediate"
+    }
+  },
+  "packageRules": [
+    {
+      "description": "Auto-merge patch updates for monitoring stack",
+      "matchPackageNames": [
+        "prom/prometheus",
+        "prom/node-exporter",
+        "grafana/grafana",
+        "grafana/loki",
+        "grafana/promtail"
+      ],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Group Ansible-related updates",
+      "matchPackagePatterns": ["^ansible"],
+      "groupName": "ansible"
+    },
+    {
+      "description": "Require approval for major updates",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Pin and track container digests",
+      "matchDatasources": ["docker"],
+      "pinDigests": true,
+      "digestUpdateFixRebaseStalePrs": true
+    }
+  ],
+  "regexManagers": [
+    {
+      "description": "Update container images in Quadlet files",
+      "fileMatch": ["\\.container$"],
+      "matchStrings": [
+        "Image=(?<depName>[^:]+):(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?",
+        "Image=(?<depName>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Update container images in Ansible variables",
+      "fileMatch": ["defaults/main\\.ya?ml$", "vars/.*\\.ya?ml$"],
+      "matchStrings": [
+        "image:\\s*[\"']?(?<depName>[^:\"']+):(?<currentValue>[^@\"'\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?[\"']?",
+        "image_tag:\\s*[\"']?(?<currentValue>[^\"']+)[\"']?\\s*#\\s*renovate:\\s*datasource=docker\\s+depName=(?<depName>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "hostRules": [
+    {
+      "description": "Rate limit for Docker Hub",
+      "matchHost": "docker.io",
+      "concurrentRequestLimit": 2
+    }
+  ],
+  "commitMessagePrefix": "chore(deps):",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "to {{#if isPinDigest}}{{{newDigestShort}}}{{else}}{{#if isMajor}}v{{{newMajor}}}{{else}}{{#if isSingleVersion}}v{{{toVersion}}}{{else}}{{{newValue}}}{{/if}}{{/if}}{{/if}}",
+  "postUpdateOptions": ["gomodTidy", "npmDedupe"],
+  "rebaseWhen": "behind-base-branch",
+  "rollback": {
+    "enabled": true,
+    "branchPrefix": "rollback-",
+    "commitMessagePrefix": "fix(rollback):"
+  }
+}

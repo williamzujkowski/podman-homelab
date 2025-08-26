@@ -1,0 +1,46 @@
+---
+# User configuration tasks
+
+- name: Create user groups
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - docker
+    - podman
+  become: yes
+
+- name: Create user accounts
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    groups: "{{ item.groups | default([]) | join(',') }}"
+    shell: "{{ item.shell | default('/bin/bash') }}"
+    create_home: "{{ item.create_home | default(true) }}"
+    comment: "{{ item.comment | default('') }}"
+    state: present
+  loop: "{{ base_users }}"
+  become: yes
+
+- name: Set up SSH authorized keys for william
+  ansible.posix.authorized_key:
+    user: william
+    key: "{{ lookup('file', '~/.ssh/id_rsa.pub', errors='ignore') | default('') }}"
+    state: present
+  become: yes
+  when: lookup('file', '~/.ssh/id_rsa.pub', errors='ignore') != ''
+
+- name: Ensure sudoers.d directory exists
+  ansible.builtin.file:
+    path: /etc/sudoers.d
+    state: directory
+    mode: '0750'
+  become: yes
+
+- name: Configure passwordless sudo for william
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/william
+    content: |
+      william ALL=(ALL) NOPASSWD:ALL
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  become: yes

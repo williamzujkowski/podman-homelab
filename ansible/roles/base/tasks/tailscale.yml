@@ -1,0 +1,41 @@
+---
+# Tailscale configuration tasks
+
+- name: Add Tailscale GPG key
+  ansible.builtin.get_url:
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: '0644'
+  become: yes
+
+- name: Add Tailscale repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg]
+      https://pkgs.tailscale.com/stable/ubuntu noble main
+    state: present
+    filename: tailscale
+  become: yes
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Check Tailscale status
+  ansible.builtin.command:
+    cmd: tailscale status
+  register: tailscale_status
+  changed_when: false
+  failed_when: false
+  become: yes
+
+- name: Display Tailscale authentication message
+  ansible.builtin.debug:
+    msg: |
+      Tailscale is installed but needs authentication.
+      Run: sudo tailscale up --ssh {{ '--ssh' if base_tailscale_ssh_enabled else '' }}
+      Then authenticate via the provided URL.
+  when: tailscale_status.rc != 0

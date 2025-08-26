@@ -1,0 +1,70 @@
+---
+# Bootstrap playbook - Initial setup for fresh systems
+- name: Bootstrap fresh Ubuntu systems
+  hosts: all
+  gather_facts: yes
+  become: yes
+  serial: "{{ serial | default(1) }}"
+
+  pre_tasks:
+    - name: Display target information
+      ansible.builtin.debug:
+        msg: |
+          Bootstrapping {{ inventory_hostname }}
+          Environment: {{ environment_name }}
+          Architecture: {{ arch }}
+
+    - name: Wait for system to become reachable
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 300
+
+    - name: Gather facts after connection
+      ansible.builtin.setup:
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Perform system upgrade
+      ansible.builtin.apt:
+        upgrade: safe
+        autoremove: yes
+        autoclean: yes
+
+    - name: Install Python3 and essential packages
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-apt
+          - python3-setuptools
+          - ca-certificates
+          - gnupg
+          - lsb-release
+          - software-properties-common
+        state: present
+
+    - name: Create ansible facts directory
+      ansible.builtin.file:
+        path: /etc/ansible/facts.d
+        state: directory
+        mode: '0755'
+
+    - name: Set bootstrap completion fact
+      ansible.builtin.copy:
+        content: |
+          {
+            "bootstrapped": true,
+            "bootstrap_date": "{{ ansible_date_time.iso8601 }}",
+            "environment": "{{ environment_name }}"
+          }
+        dest: /etc/ansible/facts.d/bootstrap.fact
+        mode: '0644'
+
+  post_tasks:
+    - name: Display bootstrap completion
+      ansible.builtin.debug:
+        msg: "Bootstrap completed for {{ inventory_hostname }}"

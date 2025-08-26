@@ -1,0 +1,45 @@
+---
+# Ansible-lint configuration
+
+profile: production
+
+exclude_paths:
+  - .cache/
+  - .github/
+  - molecule/
+
+use_default_rules: true
+
+enable_list:
+  - fqcn-builtins
+  - no-log-password
+  - no-same-owner
+
+skip_list:
+  - yaml[line-length]  # Handled by yamllint
+
+warn_list:
+  - experimental
+  - role-name[path]
+
+offline: false
+
+parseable: true
+
+quiet: false
+
+strict: false
+
+task_name_prefix: "{stem} | "
+
+var_naming_pattern: "^[a-z_][a-z0-9_]*$"
+
+mock_modules:
+  - zuul_return
+
+mock_roles:
+  - base
+  - podman
+  - monitoring
+  - logging
+  - ingress

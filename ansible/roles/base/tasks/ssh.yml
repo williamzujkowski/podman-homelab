@@ -1,0 +1,27 @@
+---
+# SSH configuration tasks
+
+- name: Create SSH config drop-in directory
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    mode: '0755'
+  become: yes
+
+- name: Deploy SSH drop-in configuration
+  ansible.builtin.template:
+    src: sshd_config_drop_in.j2
+    dest: /etc/ssh/sshd_config.d/10-lab.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: 'sshd -t -f %s'
+  become: yes
+  notify: Restart sshd
+
+- name: Ensure SSH service is enabled and started
+  ansible.builtin.systemd:
+    name: sshd
+    enabled: yes
+    state: started
+  become: yes

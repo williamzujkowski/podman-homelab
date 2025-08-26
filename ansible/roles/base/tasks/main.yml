@@ -1,0 +1,35 @@
+---
+# Base role main tasks
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  become: yes
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+  become: yes
+
+- name: Configure users
+  ansible.builtin.include_tasks: users.yml
+
+- name: Configure SSH
+  ansible.builtin.include_tasks: ssh.yml
+
+- name: Configure chrony for time synchronization
+  ansible.builtin.include_tasks: chrony.yml
+
+- name: Configure Tailscale
+  ansible.builtin.include_tasks: tailscale.yml
+  when: base_tailscale_enabled
+
+- name: Configure unattended upgrades
+  ansible.builtin.include_tasks: unattended_upgrades.yml
+  when: base_unattended_upgrades_enabled
+
+- name: Configure firewall
+  ansible.builtin.include_tasks: firewall.yml
+  when: base_firewall_enabled

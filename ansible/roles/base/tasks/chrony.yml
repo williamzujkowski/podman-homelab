@@ -1,0 +1,42 @@
+---
+# Chrony time synchronization tasks
+
+- name: Install chrony
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+  become: yes
+
+- name: Configure chrony
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+  notify: Restart chrony
+
+- name: Ensure chrony is enabled and started
+  ansible.builtin.systemd:
+    name: chrony
+    enabled: yes
+    state: started
+  become: yes
+
+- name: Wait for time synchronization
+  ansible.builtin.shell: |
+    set -o pipefail
+    for i in {1..30}; do
+      if chronyc tracking | grep -q "Leap status.*Normal"; then
+        exit 0
+      fi
+      sleep 2
+    done
+    exit 1
+  become: yes
+  changed_when: false
+  register: chrony_sync
+  retries: 3
+  delay: 10

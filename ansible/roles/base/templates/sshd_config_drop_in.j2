@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+# SSH drop-in configuration for homelab
+# Located at /etc/ssh/sshd_config.d/10-lab.conf
+
+Port {{ base_ssh_port }}
+PermitRootLogin {{ base_ssh_permit_root_login }}
+PasswordAuthentication {{ base_ssh_password_authentication }}
+PubkeyAuthentication {{ base_ssh_pubkey_authentication }}
+ChallengeResponseAuthentication no
+
+# Keep connection alive
+ClientAliveInterval {{ base_ssh_client_alive_interval }}
+ClientAliveCountMax {{ base_ssh_client_alive_count_max }}
+
+# Security hardening
+PermitEmptyPasswords no
+MaxAuthTries 3
+MaxSessions 10
+LoginGraceTime 60
+
+# Only allow specific users
+AllowUsers william breakfix
+
+# Logging
+LogLevel VERBOSE

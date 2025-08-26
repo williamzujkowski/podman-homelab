@@ -1,0 +1,79 @@
+---
+# Base configuration playbook
+- name: Apply base system configuration
+  hosts: all
+  gather_facts: yes
+  become: yes
+  serial: "{{ serial | default(1) }}"
+
+  pre_tasks:
+    - name: Check bootstrap status
+      ansible.builtin.stat:
+        path: /etc/ansible/facts.d/bootstrap.fact
+      register: bootstrap_check
+
+    - name: Fail if system not bootstrapped
+      ansible.builtin.fail:
+        msg: "System not bootstrapped. Run 00-bootstrap.yml first."
+      when: not bootstrap_check.stat.exists
+
+    - name: Run time preflight check
+      ansible.builtin.shell: |
+        set -o pipefail
+        if command -v chronyc >/dev/null 2>&1; then
+          offset=$(chronyc tracking | awk '/Last offset/ {print ($4<0?-1*$4:$4)}')
+          stratum=$(chronyc tracking | awk '/Stratum/ {print $3}')
+          offset_ms=$(echo "$offset * 1000" | bc -l 2>/dev/null || echo "1000")
+          if (( $(echo "$offset_ms < 100" | bc -l) )) && [ "$stratum" -le 3 ]; then
+            echo "Time sync OK"
+            exit 0
+          else
+            echo "Time sync warning: offset=${offset_ms}ms, stratum=${stratum}"
+          fi
+        else
+          echo "Chrony not installed yet, skipping time check"
+        fi
+      changed_when: false
+      failed_when: false
+      register: time_check
+
+    - name: Display time check result
+      ansible.builtin.debug:
+        var: time_check.stdout_lines
+
+  roles:
+    - base
+
+  post_tasks:
+    - name: Verify SSH connectivity
+      ansible.builtin.command:
+        cmd: "ss -tlnp | grep :{{ base_ssh_port | default(22) }}"
+      changed_when: false
+      register: ssh_check
+      become: yes
+
+    - name: Verify chrony synchronization
+      ansible.builtin.command:
+        cmd: chronyc tracking
+      changed_when: false
+      register: chrony_status
+      become: yes
+
+    - name: Display service status
+      ansible.builtin.debug:
+        msg: |
+          SSH Status: {{ 'OK' if ssh_check.rc == 0 else 'FAILED' }}
+          Chrony Status: {{ 'OK' if chrony_status.rc == 0 else 'FAILED' }}
+
+    - name: Set base configuration fact
+      ansible.builtin.copy:
+        content: |
+          {
+            "base_configured": true,
+            "base_config_date": "{{ ansible_date_time.iso8601 }}",
+            "ssh_port": {{ base_ssh_port | default(22) }},
+            "tailscale_enabled": {{ base_tailscale_enabled | default(true) }}
+          }
+        dest: /etc/ansible/facts.d/base.fact
+        mode: '0644'
+      become: yes
