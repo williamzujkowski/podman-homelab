@@ -3,7 +3,7 @@ Description=Caddy Web Server
 After=network-online.target
 
 [Container]
-Image=docker.io/library/caddy:2.7-alpine@sha256:1e5a90a6fb5f8c5c8a1e2b4b8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8
+Image=docker.io/library/caddy:2.7-alpine
 ContainerName=caddy
 Volume=caddy-data:/data:Z
 Volume=caddy-config:/config:Z

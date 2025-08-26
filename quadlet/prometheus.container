@@ -3,7 +3,7 @@ Description=Prometheus Monitoring System
 After=network-online.target
 
 [Container]
-Image=docker.io/prom/prometheus:v2.48.0@sha256:b8830835e3dc78373a2f8a6108144e988098c5c9d4c35a088e53aa967f4c5f66
+Image=docker.io/prom/prometheus:v2.48.0
 ContainerName=prometheus
 Volume=/etc/prometheus:/etc/prometheus:ro,Z
 Volume=prometheus-data:/prometheus:Z

@@ -96,7 +96,7 @@
       when: inventory_hostname == "vm-a"
 
     - name: Deploy Promtail configuration
-      ansible.builtin.template:
+      ansible.builtin.copy:
         content: |
           server:
             http_listen_port: 9080

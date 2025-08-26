@@ -3,7 +3,7 @@ Description=Grafana Analytics and Monitoring
 After=network-online.target prometheus.service
 
 [Container]
-Image=docker.io/grafana/grafana:10.2.2@sha256:a57f03f09f76f88c5f9c9c1e16ab30e0f32b9ad87b0c2dc6d085b8c95c1f3e1f
+Image=docker.io/grafana/grafana:10.2.2
 ContainerName=grafana
 Volume=grafana-data:/var/lib/grafana:Z
 Volume=/etc/grafana:/etc/grafana:ro,Z

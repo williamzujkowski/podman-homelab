@@ -1,0 +1,34 @@
+# Ingress configuration for homelab services
+
+# Prometheus
+prometheus.homelab.local {
+    reverse_proxy http://10.14.185.35:9090
+}
+
+# Grafana  
+grafana.homelab.local {
+    reverse_proxy http://10.14.185.35:3000
+}
+
+# Loki
+loki.homelab.local {
+    reverse_proxy http://10.14.185.35:3100
+}
+
+# Node Exporters
+node-a.homelab.local {
+    reverse_proxy http://10.14.185.35:9100
+}
+
+node-b.homelab.local {
+    reverse_proxy http://localhost:9100
+}
+
+node-c.homelab.local {
+    reverse_proxy http://10.14.185.213:9100
+}
+
+# Default site
+homelab.local, :80 {
+    respond "Homelab Ingress Controller" 200
+}

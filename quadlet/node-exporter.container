@@ -3,7 +3,7 @@ Description=Prometheus Node Exporter
 After=network-online.target
 
 [Container]
-Image=docker.io/prom/node-exporter:v1.7.0@sha256:cf2a79f6301c7574e963c3eb8f28a86e5a396f5f0e60a3f11b7a3f1e4a3b1e3f
+Image=docker.io/prom/node-exporter:v1.7.0
 ContainerName=node-exporter
 PublishPort=9100:9100
 PodmanArgs=--pid=host

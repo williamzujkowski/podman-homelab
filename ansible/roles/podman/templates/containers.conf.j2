@@ -18,17 +18,20 @@ default_capabilities = [
 
 # Logging
 log_driver = "{{ podman_log_driver }}"
-log_size_max = "{{ podman_log_size_max }}"
-log_tag = "{{ podman_log_tag }}"
+log_size_max = 10485760  # 10MB in bytes
+{% raw %}
+log_tag = "container-{{.Name}}"
+{% endraw %}
 
 # Process limits
 pids_limit = {{ podman_pids_limit }}
 
 # Security
 seccomp_profile = "{{ podman_seccomp_profile }}"
-{% if podman_apparmor_enabled %}
-apparmor_profile = "container-default"
-{% endif %}
+# AppArmor disabled - profile not available
+# {% if podman_apparmor_enabled %}
+# apparmor_profile = "container-default"
+# {% endif %}
 
 # cgroup configuration
 cgroups = "enabled"

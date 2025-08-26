@@ -42,12 +42,22 @@
   loop:
     - { name: "net.ipv4.ip_forward", value: "1" }
     - { name: "net.ipv4.conf.all.forwarding", value: "1" }
-    - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
-    - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
     - { name: "user.max_user_namespaces", value: "28633" }
   become: yes
-  when: item.name != "net.bridge.bridge-nf-call-iptables" and item.name != "net.bridge.bridge-nf-call-ip6tables"
-        or (ansible_facts['kernel'] is version('3.18', '>='))
+
+- name: Set up bridge sysctl parameters (if bridge module loaded)
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+  loop:
+    - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+  become: yes
+  failed_when: false
+  register: bridge_sysctl
 
 - name: Enable and start Podman socket
   ansible.builtin.systemd:

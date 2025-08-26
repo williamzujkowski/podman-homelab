@@ -3,7 +3,7 @@ Description=Loki Log Aggregation System
 After=network-online.target
 
 [Container]
-Image=docker.io/grafana/loki:2.9.3@sha256:5dbced69a5a90c666e588e21bb55933b673f3287ac2ede5e8c9a79e9e8b6e8f9
+Image=docker.io/grafana/loki:2.9.3
 ContainerName=loki
 Volume=loki-data:/loki:Z
 Volume=/etc/loki:/etc/loki:ro,Z

@@ -63,4 +63,4 @@ podman_systemd_timeout_stop_sec: 70
 
 # Logging
 podman_log_size_max: "10m"
-podman_log_tag: "container-{{.Name}}"
+podman_log_tag: "container-{% raw %}{{.Name}}{% endraw %}"

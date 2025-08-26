@@ -1,0 +1,24 @@
+# Grafana datasources configuration
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    orgId: 1
+    url: http://localhost:9090
+    basicAuth: false
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+    editable: true
+
+  - name: Loki
+    type: loki
+    access: proxy
+    orgId: 1
+    url: http://localhost:3100
+    basicAuth: false
+    jsonData:
+      maxLines: 1000
+    editable: true

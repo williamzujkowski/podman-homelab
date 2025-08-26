@@ -3,7 +3,7 @@ Description=Promtail Log Collector
 After=network-online.target loki.service
 
 [Container]
-Image=docker.io/grafana/promtail:2.9.3@sha256:bb919ad95e6cbdf14e2b37f922fd87e25ab6982f1e7a491e0e5cf5e8ba3a3e8f
+Image=docker.io/grafana/promtail:2.9.3
 ContainerName=promtail
 Volume=/etc/promtail:/etc/promtail:ro,Z
 Volume=/var/log/journal:/var/log/journal:ro
