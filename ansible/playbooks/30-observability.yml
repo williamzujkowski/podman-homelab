@@ -37,19 +37,19 @@
           global:
             scrape_interval: 15s
             evaluation_interval: 15s
-          
+
           scrape_configs:
             - job_name: 'prometheus'
               static_configs:
                 - targets: ['localhost:9090']
-            
+
             - job_name: 'node'
               static_configs:
                 - targets:
                   - '{{ hostvars["vm-a"]["ansible_host"] }}:9100'
                   - '{{ hostvars["vm-b"]["ansible_host"] }}:9100'
                   - '{{ hostvars["vm-c"]["ansible_host"] }}:9100'
-            
+
             - job_name: 'grafana'
               static_configs:
                 - targets: ['localhost:3000']
@@ -61,11 +61,11 @@
       ansible.builtin.copy:
         content: |
           auth_enabled: false
-          
+
           server:
             http_listen_port: 3100
             grpc_listen_port: 9096
-          
+
           common:
             path_prefix: /loki
             storage:
@@ -76,7 +76,7 @@
             ring:
               kvstore:
                 store: inmemory
-          
+
           schema_config:
             configs:
               - from: 2020-10-24
@@ -86,7 +86,7 @@
                 index:
                   prefix: index_
                   period: 24h
-          
+
           limits_config:
             enforce_metric_name: false
             reject_old_samples: true
@@ -101,13 +101,13 @@
           server:
             http_listen_port: 9080
             grpc_listen_port: 0
-          
+
           positions:
             filename: /tmp/positions.yaml
-          
+
           clients:
             - url: http://{{ hostvars["vm-a"]["ansible_host"] }}:3100/loki/api/v1/push
-          
+
           scrape_configs:
             - job_name: journal
               journal:
@@ -128,11 +128,11 @@
           :80 {
               respond "Homelab Ingress"
           }
-          
+
           :3000 {
               reverse_proxy localhost:3000
           }
-          
+
           :9090 {
               reverse_proxy localhost:9090
           }
@@ -226,11 +226,11 @@
       ansible.builtin.debug:
         msg: |
           Services deployed successfully!
-          
+
           Prometheus: http://{{ hostvars['vm-a']['ansible_host'] }}:9090
           Grafana: http://{{ hostvars['vm-a']['ansible_host'] }}:3000 (admin/admin)
           Loki: http://{{ hostvars['vm-a']['ansible_host'] }}:3100
-          
+
           Node Exporters:
             - http://{{ hostvars['vm-a']['ansible_host'] }}:9100/metrics
             - http://{{ hostvars['vm-b']['ansible_host'] }}:9100/metrics

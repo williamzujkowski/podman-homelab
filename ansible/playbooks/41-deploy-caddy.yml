@@ -1,0 +1,63 @@
+---
+# Deploy Caddy Ingress Controller to vm-b
+
+- name: Deploy Caddy Ingress Controller
+  hosts: ingress
+  become: true
+  gather_facts: yes
+
+  tasks:
+    - name: Create Caddy configuration directory
+      ansible.builtin.file:
+        path: /etc/caddy
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Deploy Caddyfile configuration
+      ansible.builtin.template:
+        src: ../templates/caddy/Caddyfile.j2
+        dest: /etc/caddy/Caddyfile
+        mode: '0644'
+        owner: root
+        group: root
+        backup: yes
+
+    - name: Create Caddy quadlet directory
+      ansible.builtin.file:
+        path: /etc/containers/systemd
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Copy Caddy quadlet file
+      ansible.builtin.copy:
+        src: ../../quadlet/caddy.container
+        dest: /etc/containers/systemd/caddy.container
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Start and enable Caddy service
+      ansible.builtin.systemd:
+        name: caddy
+        state: started
+        enabled: yes
+
+    - name: Wait for Caddy to be healthy
+      ansible.builtin.uri:
+        url: http://localhost:2019/health
+        status_code: 200
+      retries: 10
+      delay: 5
+      register: caddy_health
+
+    - name: Display Caddy status
+      ansible.builtin.debug:
+        msg: "Caddy is {{ 'healthy' if caddy_health.status == 200 else 'unhealthy' }}"

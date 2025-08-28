@@ -6,14 +6,14 @@
   hosts: pis
   become: true
   gather_facts: yes
-  
+
   tasks:
     - name: Set hostname
-      hostname:
+      ansible.builtin.hostname:
         name: "{{ short_hostname }}"
-      
+
     - name: Update /etc/hosts
-      blockinfile:
+      ansible.builtin.blockinfile:
         path: /etc/hosts
         block: |
           # Cluster nodes
@@ -22,11 +22,12 @@
           192.168.1.10  pi-c.grenlan.com pi-c
           192.168.1.13  pi-d.grenlan.com pi-d
         marker: "# {mark} ANSIBLE MANAGED CLUSTER HOSTS"
-        
+
     - name: Configure systemd-resolved for DNS
-      copy:
+      ansible.builtin.copy:
         dest: /etc/systemd/resolved.conf
         backup: yes
+        mode: '0644'
         content: |
           [Resolve]
           DNS=192.168.1.1 8.8.8.8 8.8.4.4
@@ -38,23 +39,24 @@
           DNSOverTLS=no
           Cache=yes
       notify: restart systemd-resolved
-      
+
     - name: Update netplan configuration
-      blockinfile:
+      ansible.builtin.blockinfile:
         path: /etc/netplan/01-netcfg.yaml
         block: |
           nameservers:
             search: [grenlan.com, local]
         marker: "      # {mark} ANSIBLE MANAGED DNS"
         insertafter: "dhcp4: true"
-        
+
     - name: Apply netplan changes
-      command: netplan apply
+      ansible.builtin.command: netplan apply
       changed_when: true
-      
+
   handlers:
     - name: restart systemd-resolved
-      systemd:
+      ansible.builtin.systemd:
         name: systemd-resolved
         state: restarted
         daemon_reload: yes
+

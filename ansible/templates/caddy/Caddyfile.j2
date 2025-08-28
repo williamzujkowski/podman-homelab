@@ -1,0 +1,41 @@
+# Caddy Ingress Configuration
+# Managed by Ansible
+
+{
+    admin :2019
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+}
+
+# Prometheus reverse proxy
+prometheus.{{ domain | default('local') }} {
+    reverse_proxy 10.14.185.35:9090 {
+        header_up Host {http.reverse_proxy.upstream.hostport}
+    }
+}
+
+# Grafana reverse proxy
+grafana.{{ domain | default('local') }} {
+    reverse_proxy 10.14.185.35:3000 {
+        header_up Host {http.reverse_proxy.upstream.hostport}
+    }
+}
+
+# Loki reverse proxy
+loki.{{ domain | default('local') }} {
+    reverse_proxy 10.14.185.35:3100 {
+        header_up Host {http.reverse_proxy.upstream.hostport}
+    }
+}
+
+# Health check endpoint
+:8080 {
+    respond /health "OK" 200
+    log {
+        output stdout
+        format json
+    }
+}

@@ -35,31 +35,31 @@
               admin localhost:2019
               auto_https off
           }
-          
+
           # Import site configs
           import /etc/caddy/sites/*.caddy
-          
+
           # Default site
           :80 {
               root * /var/www/html
               file_server
-              
+
               handle /metrics {
                   reverse_proxy {{ hostvars['vm-a']['ansible_host'] }}:9090
               }
-              
+
               handle /grafana* {
                   reverse_proxy {{ hostvars['vm-a']['ansible_host'] }}:3000
               }
-              
+
               handle /prometheus* {
                   reverse_proxy {{ hostvars['vm-a']['ansible_host'] }}:9090
               }
-              
+
               handle /loki* {
                   reverse_proxy {{ hostvars['vm-a']['ansible_host'] }}:3100
               }
-              
+
               handle {
                   respond "Homelab Ingress Controller" 200
               }
@@ -161,9 +161,9 @@
       ansible.builtin.debug:
         msg: |
           Ingress deployed successfully!
-          
+
           Main URL: http://{{ ansible_host }}
-          
+
           Service Routes:
           - http://{{ ansible_host }}/prometheus
           - http://{{ ansible_host }}/grafana
