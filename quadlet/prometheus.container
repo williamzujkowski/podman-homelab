@@ -10,6 +10,7 @@ Volume=prometheus-data:/prometheus:Z
 PublishPort=9090:9090
 Environment=TZ=UTC
 Label=io.containers.autoupdate=registry
+PodmanArgs=--memory=512m --cpus=0.5
 HealthCmd=/bin/promtool check ready
 HealthInterval=30s
 HealthRetries=3

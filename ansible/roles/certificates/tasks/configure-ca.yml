@@ -1,0 +1,74 @@
+---
+# Configure step-ca Certificate Authority
+
+- name: Check if CA is already initialized
+  stat:
+    path: "{{ step_ca_path }}/config/ca.json"
+  register: ca_config
+
+- name: Initialize step-ca
+  when: not ca_config.stat.exists
+  become: true
+  block:
+    - name: Initialize CA with step
+      ansible.builtin.shell: |
+        step ca init \
+          --name "Pi Cluster CA" \
+          --dns "{{ ca_host }}" \
+          --address ":{{ ca_port }}" \
+          --provisioner "{{ ca_provisioner }}" \
+          --password-file <(echo "{{ ca_password }}") \
+          --provisioner-password-file <(echo "{{ ca_password }}")
+      args:
+        executable: /bin/bash
+        chdir: "{{ step_ca_path }}"
+        creates: "{{ step_ca_path }}/config/ca.json"
+      environment:
+        STEPPATH: "{{ step_ca_path }}"
+
+    - name: Update CA configuration for internal network
+      lineinfile:
+        path: "{{ step_ca_path }}/config/ca.json"
+        regexp: '"dnsNames":'
+        line: '    "dnsNames": ["{{ ca_host }}", "localhost", "ca.grenlan.com"],'
+
+- name: Create systemd service for step-ca
+  become: true
+  copy:
+    content: |
+      [Unit]
+      Description=Step CA Certificate Authority
+      After=network.target
+      Documentation=https://github.com/smallstep/certificates
+
+      [Service]
+      Type=simple
+      User=step
+      Group=step
+      Environment="STEPPATH={{ step_ca_path }}"
+      ExecStart=/usr/local/bin/step-ca {{ step_ca_path }}/config/ca.json \
+        --password-file {{ step_ca_path }}/secrets/password
+      Restart=on-failure
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/step-ca.service
+    mode: '0644'
+
+- name: Save CA password
+  become: true
+  copy:
+    content: "{{ ca_password }}"
+    dest: "{{ step_ca_path }}/secrets/password"
+    owner: step
+    group: step
+    mode: '0600'
+
+- name: Start and enable step-ca service
+  become: true
+  systemd:
+    name: step-ca
+    state: started
+    enabled: true
+    daemon_reload: true

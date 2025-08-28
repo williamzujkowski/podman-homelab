@@ -1,0 +1,30 @@
+---
+# Handlers for certificate role
+
+- name: restart traefik
+  become: true
+  systemd:
+    name: traefik
+    state: restarted
+  when: "'ingress' in group_names or inventory_hostname == 'pi-b'"
+
+- name: restart grafana
+  become: true
+  systemd:
+    name: grafana-server
+    state: restarted
+  when: "'monitoring' in group_names or inventory_hostname == 'pi-a'"
+
+- name: restart prometheus
+  become: true
+  systemd:
+    name: prometheus
+    state: restarted
+  when: "'monitoring' in group_names or inventory_hostname == 'pi-a'"
+
+- name: restart step-ca
+  become: true
+  systemd:
+    name: step-ca
+    state: restarted
+  when: "inventory_hostname == ca_host"

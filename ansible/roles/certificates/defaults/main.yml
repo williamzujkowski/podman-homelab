@@ -1,0 +1,36 @@
+---
+# Certificate Authority Configuration
+ca_host: pi-a.grenlan.com
+ca_port: 8443
+ca_provisioner: ansible
+ca_password: "{{ vault_ca_password | default('ChangeMe123!') }}"
+
+# Certificate settings
+cert_validity: 90d
+cert_root_validity: 3650d
+
+# Domains to generate certificates for
+cert_domains:
+  - "*.grenlan.com"
+  - "*.{{ ansible_domain | default('local') }}"
+  - "pi-a.grenlan.com"
+  - "pi-b.grenlan.com"
+  - "pi-c.grenlan.com"
+  - "pi-d.grenlan.com"
+  - "grafana.grenlan.com"
+  - "prometheus.grenlan.com"
+  - "traefik.grenlan.com"
+  - "minio.grenlan.com"
+  - "storage.grenlan.com"
+
+# Certificate storage paths
+cert_base_path: /etc/ssl/cluster
+ca_cert_path: "{{ cert_base_path }}/ca.crt"
+cert_path: "{{ cert_base_path }}/server.crt"
+key_path: "{{ cert_base_path }}/server.key"
+
+# Step-ca installation
+step_ca_version: "0.28.4"
+step_cli_version: "0.25.2"
+step_ca_path: /etc/step-ca
+step_ca_data: /var/lib/step-ca

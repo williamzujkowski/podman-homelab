@@ -1,0 +1,52 @@
+---
+# Bootstrap trust for CA certificate
+
+- name: Create certificate directory
+  become: true
+  file:
+    path: "{{ cert_base_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Fetch CA certificate from CA host
+  when: inventory_hostname != 'pi-a'
+  block:
+    - name: Get CA certificate
+      uri:
+        url: "https://{{ ca_host }}:{{ ca_port }}/root/ca.crt"
+        validate_certs: false
+        return_content: true
+      register: ca_cert_response
+      retries: 5
+      delay: 10
+      until: ca_cert_response.status == 200
+
+    - name: Save CA certificate
+      become: true
+      copy:
+        content: "{{ ca_cert_response.content }}"
+        dest: "{{ ca_cert_path }}"
+        mode: '0644'
+
+- name: Copy CA certificate on CA host
+  when: inventory_hostname == 'pi-a'
+  become: true
+  copy:
+    src: "{{ step_ca_path }}/certs/root_ca.crt"
+    dest: "{{ ca_cert_path }}"
+    remote_src: true
+    mode: '0644'
+
+- name: Add CA to system trust store (Ubuntu)
+  become: true
+  block:
+    - name: Copy CA cert to trust store
+      copy:
+        src: "{{ ca_cert_path }}"
+        dest: /usr/local/share/ca-certificates/pi-cluster-ca.crt
+        remote_src: true
+        mode: '0644'
+
+    - name: Update CA trust
+      command: update-ca-certificates
+      changed_when: true

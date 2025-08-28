@@ -72,3 +72,39 @@ coverage.xml
 .hive-mind/
 .swarm/
 deleteme
+
+# Test artifacts
+tests/playwright/node_modules/
+tests/playwright/test-results/
+tests/playwright/.cache/
+
+# Ansible modules cache
+ansible/.ansible/
+# Sensitive files - DO NOT COMMIT
+SENSITIVE-*.md
+*-SENSITIVE.md
+*.sensitive
+*.secret
+*.key
+*.pem
+*.pfx
+
+# Ansible vault
+*.vault
+.ansible_vault_pass
+vault.yml
+**/vault.yml
+**/group_vars/*/vault.yml
+
+# SSH keys
+id_*
+id_*.pub
+known_hosts
+authorized_keys
+~/.ssh/
+
+# Passwords and credentials
+passwords.txt
+credentials.txt
+*.password
+*.passwd

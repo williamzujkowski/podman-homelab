@@ -6,7 +6,7 @@ After=network-online.target
 Image=docker.io/prom/node-exporter:v1.7.0
 ContainerName=node-exporter
 PublishPort=9100:9100
-PodmanArgs=--pid=host
+PodmanArgs=--pid=host --memory=128m --cpus=0.2
 Network=host
 Environment=TZ=UTC
 Label=io.containers.autoupdate=registry

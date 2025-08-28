@@ -1,0 +1,60 @@
+---
+# Set hostnames and DNS configuration for all Pis
+# This updates from .local to pi-x.grenlan.com
+
+- name: Configure hostnames and DNS
+  hosts: pis
+  become: true
+  gather_facts: yes
+  
+  tasks:
+    - name: Set hostname
+      hostname:
+        name: "{{ short_hostname }}"
+      
+    - name: Update /etc/hosts
+      blockinfile:
+        path: /etc/hosts
+        block: |
+          # Cluster nodes
+          192.168.1.12  pi-a.grenlan.com pi-a
+          192.168.1.11  pi-b.grenlan.com pi-b
+          192.168.1.10  pi-c.grenlan.com pi-c
+          192.168.1.13  pi-d.grenlan.com pi-d
+        marker: "# {mark} ANSIBLE MANAGED CLUSTER HOSTS"
+        
+    - name: Configure systemd-resolved for DNS
+      copy:
+        dest: /etc/systemd/resolved.conf
+        backup: yes
+        content: |
+          [Resolve]
+          DNS=192.168.1.1 8.8.8.8 8.8.4.4
+          FallbackDNS=1.1.1.1 1.0.0.1
+          Domains=grenlan.com
+          LLMNR=yes
+          MulticastDNS=yes
+          DNSSEC=no
+          DNSOverTLS=no
+          Cache=yes
+      notify: restart systemd-resolved
+      
+    - name: Update netplan configuration
+      blockinfile:
+        path: /etc/netplan/01-netcfg.yaml
+        block: |
+          nameservers:
+            search: [grenlan.com, local]
+        marker: "      # {mark} ANSIBLE MANAGED DNS"
+        insertafter: "dhcp4: true"
+        
+    - name: Apply netplan changes
+      command: netplan apply
+      changed_when: true
+      
+  handlers:
+    - name: restart systemd-resolved
+      systemd:
+        name: systemd-resolved
+        state: restarted
+        daemon_reload: yes

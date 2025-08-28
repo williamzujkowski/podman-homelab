@@ -1,0 +1,40 @@
+# Docker/Podman container for building Pi images safely
+FROM ubuntu:24.04
+
+# Install required packages
+RUN apt-get update && apt-get install -y \
+    wget \
+    xz-utils \
+    curl \
+    git \
+    sudo \
+    parted \
+    kpartx \
+    qemu-user-static \
+    qemu-utils \
+    cloud-image-utils \
+    systemd-container \
+    mkisofs \
+    genisoimage \
+    dosfstools \
+    mtools \
+    rsync \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create build user
+RUN useradd -m -s /bin/bash builder && \
+    echo 'builder ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Set up work directory
+WORKDIR /build
+RUN chown builder:builder /build
+
+USER builder
+
+# Copy build script
+COPY build-custom-image.sh /build/
+RUN chmod +x /build/build-custom-image.sh
+
+# Entry point
+ENTRYPOINT ["/build/build-custom-image.sh"]

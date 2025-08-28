@@ -1,0 +1,59 @@
+---
+# Deploy and manage certificates across the cluster
+# This playbook:
+# 1. Sets up step-ca as internal Certificate Authority on pi-a
+# 2. Generates certificates for all services
+# 3. Configures services to use HTTPS
+
+- name: Deploy Certificate Authority and TLS certificates
+  hosts: pis
+  gather_facts: true
+  become: true
+
+  vars:
+    ca_host: pi-a.grenlan.com
+    configure_services: true
+
+  pre_tasks:
+    - name: Ensure time is synchronized (required for certificates)
+      ansible.builtin.shell: |
+        set -o pipefail
+        chronyc tracking | grep -E "System time.*seconds slow|System time.*seconds fast" | awk '{print $4}'
+      args:
+        executable: /bin/bash
+      register: time_drift
+      changed_when: false
+      failed_when: time_drift.stdout != "" and (time_drift.stdout | float) > 0.1
+
+    - name: Check stratum level
+      ansible.builtin.shell: |
+        set -o pipefail
+        chronyc tracking | grep "Stratum" | awk '{print $3}'
+      args:
+        executable: /bin/bash
+      register: stratum
+      changed_when: false
+      failed_when: (stratum.stdout | int) > 5
+
+  roles:
+    - certificates
+
+  post_tasks:
+    - name: Verify CA service is running
+      systemd:
+        name: step-ca
+        state: started
+      when: inventory_hostname == ca_host
+
+    - name: Test certificate generation
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}"
+        validate_certs: true
+      ignore_errors: true
+      register: cert_test
+
+    - name: Display certificate status
+      debug:
+        msg: >-
+          Certificate test for {{ inventory_hostname }}:
+          {{ 'SUCCESS' if cert_test.status is defined else 'PENDING' }}

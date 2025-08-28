@@ -1,0 +1,54 @@
+---
+# Generate certificates for hosts
+
+- name: Check if certificate already exists
+  stat:
+    path: "{{ cert_path }}"
+  register: existing_cert
+
+- name: Generate certificate for this host
+  when: not existing_cert.stat.exists or force_cert_renewal | default(false)
+  become: true
+  block:
+    - name: Create certificate request
+      shell: |
+        step ca certificate \
+          "{{ inventory_hostname }}" \
+          "{{ cert_path }}" \
+          "{{ key_path }}" \
+          --ca-url "https://{{ ca_host }}:{{ ca_port }}" \
+          --root "{{ ca_cert_path }}" \
+          --san "{{ inventory_hostname }}" \
+          --san "{{ inventory_hostname_short }}" \
+          --san "{{ ansible_default_ipv4.address }}" \
+          --san "localhost" \
+          --san "127.0.0.1" \
+          {% for domain in cert_domains %}
+          {% if inventory_hostname in domain or '*' in domain %}
+          --san "{{ domain }}" \
+          {% endif %}
+          {% endfor %}
+          --provisioner "{{ ca_provisioner }}" \
+          --provisioner-password-file <(echo "{{ ca_password }}") \
+          --not-after "{{ cert_validity }}" \
+          --force
+      args:
+        executable: /bin/bash
+      environment:
+        STEPPATH: /tmp/step-{{ inventory_hostname }}
+
+    - name: Set certificate permissions
+      file:
+        path: "{{ item.path }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ cert_path }}", mode: '0644' }
+        - { path: "{{ key_path }}", mode: '0600' }
+
+    - name: Create certificate bundle (for services that need it)
+      shell: |
+        cat "{{ cert_path }}" "{{ ca_cert_path }}" > "{{ cert_base_path }}/server-bundle.crt"
+      args:
+        creates: "{{ cert_base_path }}/server-bundle.crt"

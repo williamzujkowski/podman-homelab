@@ -1,0 +1,23 @@
+---
+# Main tasks for certificate management
+
+- name: Install step-ca on CA host
+  include_tasks: install-ca.yml
+  when: inventory_hostname == 'pi-a' or ansible_hostname == 'pi-a'
+
+- name: Configure step-ca
+  include_tasks: configure-ca.yml
+  when: inventory_hostname == 'pi-a' or ansible_hostname == 'pi-a'
+
+- name: Install step CLI on all hosts
+  include_tasks: install-cli.yml
+
+- name: Bootstrap trust for CA certificate
+  include_tasks: bootstrap-trust.yml
+
+- name: Generate host certificates
+  include_tasks: generate-certs.yml
+
+- name: Configure services to use certificates
+  include_tasks: configure-services.yml
+  when: configure_services | default(true)

@@ -1,0 +1,72 @@
+---
+# Configure services to use certificates
+
+- name: Configure Traefik TLS
+  when: "'ingress' in group_names or inventory_hostname == 'pi-b'"
+  become: true
+  block:
+    - name: Create Traefik TLS configuration
+      copy:
+        content: |
+          tls:
+            certificates:
+              - certFile: {{ cert_path }}
+                keyFile: {{ key_path }}
+            stores:
+              default:
+                defaultCertificate:
+                  certFile: {{ cert_path }}
+                  keyFile: {{ key_path }}
+        dest: /etc/traefik/dynamic/tls.yml
+        mode: '0644'
+      notify: restart traefik
+
+    - name: Update Traefik static configuration for HTTPS
+      blockinfile:
+        path: /etc/traefik/traefik.yml
+        marker: "# {mark} ANSIBLE MANAGED TLS BLOCK"
+        block: |
+          entryPoints:
+            websecure:
+              address: ":443"
+              http:
+                tls: true
+
+          serversTransport:
+            insecureSkipVerify: false
+            rootCAs:
+              - {{ ca_cert_path }}
+      notify: restart traefik
+
+- name: Configure Grafana TLS
+  when: "'monitoring' in group_names or inventory_hostname == 'pi-a'"
+  become: true
+  block:
+    - name: Update Grafana configuration for HTTPS
+      community.general.ini_file:
+        path: /etc/grafana/grafana.ini
+        section: server
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+        mode: '0640'
+      loop:
+        - { option: protocol, value: https }
+        - { option: cert_file, value: "{{ cert_path }}" }
+        - { option: cert_key, value: "{{ key_path }}" }
+        - { option: enforce_domain, value: "true" }
+        - { option: domain, value: "grafana.grenlan.com" }
+      notify: restart grafana
+
+- name: Configure Prometheus TLS
+  when: "'monitoring' in group_names or inventory_hostname == 'pi-a'"
+  become: true
+  block:
+    - name: Create Prometheus web config
+      copy:
+        content: |
+          tls_server_config:
+            cert_file: {{ cert_path }}
+            key_file: {{ key_path }}
+        dest: /etc/prometheus/web.yml
+        mode: '0644'
+      notify: restart prometheus

@@ -1,0 +1,44 @@
+{
+  "network": {
+    "subnet": "192.168.1.0/24",
+    "gateway": "192.168.1.1",
+    "dns_primary": "192.168.1.1",
+    "dns_secondary": "1.1.1.1",
+    "domain": "local"
+  },
+  "static_leases": {
+    "pi-a": {
+      "hostname": "pi-a",
+      "ip": "192.168.1.10",
+      "mac": "PENDING",
+      "role": "monitoring",
+      "services": ["prometheus", "grafana", "loki"]
+    },
+    "pi-b": {
+      "hostname": "pi-b", 
+      "ip": "192.168.1.11",
+      "mac": "PENDING",
+      "role": "ingress",
+      "services": ["traefik", "cloudflared"]
+    },
+    "pi-c": {
+      "hostname": "pi-c",
+      "ip": "192.168.1.12",
+      "mac": "PENDING",
+      "role": "worker",
+      "services": ["applications"]
+    },
+    "pi-d": {
+      "hostname": "pi-d",
+      "ip": "192.168.1.13",
+      "mac": "PENDING",
+      "role": "backup",
+      "services": ["backup", "storage"]
+    }
+  },
+  "dhcp_pool": {
+    "start": "192.168.1.100",
+    "end": "192.168.1.200",
+    "lease_time": "86400"
+  }
+}

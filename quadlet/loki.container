@@ -10,6 +10,7 @@ Volume=/etc/loki:/etc/loki:ro,Z
 PublishPort=3100:3100
 Environment=TZ=UTC
 Label=io.containers.autoupdate=registry
+PodmanArgs=--memory=512m --cpus=0.5
 HealthCmd=wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1
 HealthInterval=30s
 HealthRetries=3

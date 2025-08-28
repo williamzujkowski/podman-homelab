@@ -1,0 +1,43 @@
+---
+# Install step CLI on all hosts
+
+- name: Check if step CLI is already installed
+  stat:
+    path: /usr/local/bin/step
+  register: step_cli_binary
+
+- name: Download and install step CLI
+  when: not step_cli_binary.stat.exists
+  become: true
+  block:
+    - name: Detect architecture
+      set_fact:
+        step_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+    - name: Download step CLI
+      get_url:
+        url: "https://github.com/smallstep/cli/releases/download/v{{ step_cli_version }}/step_linux_{{ step_cli_version }}_{{ step_arch }}.tar.gz"
+        dest: /tmp/step-cli.tar.gz
+        mode: '0644'
+
+    - name: Extract step CLI
+      unarchive:
+        src: /tmp/step-cli.tar.gz
+        dest: /tmp
+        remote_src: true
+        creates: "/tmp/step_{{ step_cli_version }}/bin/step"
+
+    - name: Install step CLI binary
+      copy:
+        src: "/tmp/step_{{ step_cli_version }}/bin/step"
+        dest: /usr/local/bin/step
+        mode: '0755'
+        remote_src: true
+
+    - name: Clean up temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/step-cli.tar.gz
+        - "/tmp/step_{{ step_cli_version }}"

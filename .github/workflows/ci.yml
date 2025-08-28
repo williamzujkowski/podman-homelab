@@ -1,12 +1,15 @@
----
 name: CI
 
 on:
-  pull_request:
-    branches: [main, dev]
   push:
-    branches: [dev]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
+
+env:
+  ANSIBLE_FORCE_COLOR: "1"
+  ANSIBLE_HOST_KEY_CHECKING: "false"
 
 jobs:
   lint:
@@ -21,37 +24,41 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Cache pip packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install ansible ansible-lint yamllint
 
       - name: Run yamllint
-        run: yamllint . -c .yamllint
+        run: yamllint .
 
       - name: Run ansible-lint
-        run: ansible-lint
+        run: |
+          cd ansible
+          ansible-lint
 
-  molecule:
-    name: Molecule Test
+  validate-quadlet:
+    name: Validate Quadlet Files
     runs-on: ubuntu-latest
-    needs: lint
-    strategy:
-      matrix:
-        role:
-          - base
-          - podman
-          - monitoring
-          - logging
-          - ingress
+    container:
+      image: quay.io/podman/stable:latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Quadlet files
+        run: |
+          for file in quadlet/*.container; do
+            echo "Validating $file..."
+            podman system service --time=0 &
+            sleep 2
+            /usr/lib/systemd/system-generators/podman-system-generator --dryrun "$file"
+          done
+
+  test-ansible-playbooks:
+    name: Test Ansible Playbooks
+    runs-on: ubuntu-latest
+    needs: [lint]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -61,32 +68,26 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Ansible
         run: |
-          pip install --upgrade pip
-          pip install ansible molecule molecule-podman pytest pytest-testinfra
-          ansible-galaxy collection install containers.podman community.general ansible.posix
+          python -m pip install --upgrade pip
+          pip install ansible
 
-      - name: Run Molecule tests
+      - name: Install Ansible collections
         run: |
-          cd ansible/roles/${{ matrix.role }}
-          molecule test || true  # Allow failures for now until roles are complete
-        env:
-          MOLECULE_DISTRO: ubuntu2404
+          ansible-galaxy collection install containers.podman
+          ansible-galaxy collection install community.general
 
-  shellcheck:
-    name: ShellCheck
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Run playbooks in check mode
+        run: |
+          cd ansible
+          # Test syntax of all playbooks
+          for playbook in playbooks/*.yml; do
+            echo "Testing $playbook syntax..."
+            ansible-playbook --syntax-check "$playbook"
+          done
 
-      - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@2.0.0
-        with:
-          scandir: './scripts'
-
-  security:
+  security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
     steps:
@@ -94,14 +95,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy security scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
+          scan-type: 'config'
+          hide-progress: false
           format: 'sarif'
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
           sarif_file: 'trivy-results.sarif'

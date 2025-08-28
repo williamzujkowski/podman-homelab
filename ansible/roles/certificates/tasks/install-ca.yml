@@ -1,0 +1,71 @@
+---
+# Install step-ca Certificate Authority
+
+- name: Check if step-ca is already installed
+  stat:
+    path: /usr/local/bin/step-ca
+  register: step_ca_binary
+
+- name: Download and install step-ca
+  when: not step_ca_binary.stat.exists
+  block:
+    - name: Detect architecture
+      set_fact:
+        step_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+    - name: Download step-ca archive
+      get_url:
+        url: "https://github.com/smallstep/certificates/releases/download/v{{ step_ca_version }}/step-ca_linux_{{ step_ca_version }}_{{ step_arch }}.tar.gz"
+        dest: /tmp/step-ca.tar.gz
+        mode: '0644'
+      become: true
+
+    - name: Extract step-ca archive
+      unarchive:
+        src: /tmp/step-ca.tar.gz
+        dest: /tmp
+        remote_src: true
+        creates: "/tmp/step-ca"
+      become: true
+
+    - name: Install step-ca binary
+      copy:
+        src: "/tmp/step-ca"
+        dest: /usr/local/bin/step-ca
+        mode: '0755'
+        remote_src: true
+      become: true
+
+    - name: Clean up step-ca archive
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/step-ca.tar.gz
+        - /tmp/step-ca
+      become: true
+
+- name: Create step-ca user and directories
+  become: true
+  block:
+    - name: Create step-ca system user
+      user:
+        name: step
+        system: true
+        shell: /bin/false
+        home: "{{ step_ca_data }}"
+        create_home: false
+
+    - name: Create step-ca directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: step
+        group: step
+        mode: '0700'
+      loop:
+        - "{{ step_ca_path }}"
+        - "{{ step_ca_data }}"
+        - "{{ step_ca_path }}/config"
+        - "{{ step_ca_path }}/certs"
+        - "{{ step_ca_path }}/secrets"

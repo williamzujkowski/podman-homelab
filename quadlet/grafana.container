@@ -14,6 +14,7 @@ Environment=GF_SERVER_ROOT_URL=http://localhost:3000
 Environment=GF_ANALYTICS_REPORTING_ENABLED=false
 Environment=TZ=UTC
 Label=io.containers.autoupdate=registry
+PodmanArgs=--memory=512m --cpus=0.5
 HealthCmd=wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 HealthInterval=30s
 HealthRetries=3

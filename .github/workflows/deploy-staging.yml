@@ -1,58 +1,42 @@
----
-name: Deploy to Staging VMs
+name: Deploy to Staging
 
 on:
   workflow_dispatch:
-    inputs:
-      playbook:
-        description: 'Playbook to run'
-        required: true
-        default: '10-base.yml'
-        type: choice
-        options:
-          - '00-bootstrap.yml'
-          - '10-base.yml'
-          - '20-podman.yml'
-          - '30-observability.yml'
-          - '40-ingress.yml'
-          - '50-secrets-sso.yml'
-      serial:
-        description: 'Deployment serial (1 = one host at a time)'
-        required: false
-        default: '1'
-      check_mode:
-        description: 'Run in check mode (dry run)'
-        required: false
-        type: boolean
-        default: false
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
       - 'ansible/**'
       - 'quadlet/**'
       - '.github/workflows/deploy-staging.yml'
 
+env:
+  ANSIBLE_FORCE_COLOR: "1"
+  ANSIBLE_HOST_KEY_CHECKING: "false"
+
 jobs:
   preflight:
     name: Preflight Checks
     runs-on: ubuntu-latest
+    outputs:
+      continue: ${{ steps.check.outputs.continue }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Validate inputs
+      - name: Run preflight checks
+        id: check
         run: |
-          echo "Playbook: ${{ inputs.playbook || '10-base.yml' }}"
-          echo "Serial: ${{ inputs.serial || '1' }}"
-          echo "Check mode: ${{ inputs.check_mode || false }}"
+          echo "Running preflight checks..."
+          echo "continue=true" >> $GITHUB_OUTPUT
 
   deploy:
-    name: Deploy to Staging
+    name: Deploy to Staging VMs
     runs-on: ubuntu-latest
-    needs: preflight
+    needs: [preflight]
+    if: needs.preflight.outputs.continue == 'true'
     environment:
       name: staging
-      url: https://staging.homelab.local
+      url: http://staging.homelab.local
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -62,68 +46,67 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Connect to Tailscale (Optional)
-        if: ${{ vars.TAILSCALE_ENABLED == 'true' }}
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-          version: stable
-
       - name: Install Ansible
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install ansible
-          ansible-galaxy collection install containers.podman community.general ansible.posix
+
+      - name: Install Ansible collections
+        run: |
+          ansible-galaxy collection install containers.podman
+          ansible-galaxy collection install community.general
 
       - name: Set up SSH key
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          cat >> ~/.ssh/config <<EOF
-          Host vm-* *.local
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Configure SSH config
+        run: |
+          cat >> ~/.ssh/config << 'CONFIG'
+          Host vm-a
+            HostName ${{ secrets.VM_A_IP }}
+            User ${{ secrets.VM_USER }}
+            IdentityFile ~/.ssh/id_ed25519
             StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-            User ubuntu
-            IdentityFile ~/.ssh/id_rsa
-          EOF
-          chmod 600 ~/.ssh/config
+          
+          Host vm-b
+            HostName ${{ secrets.VM_B_IP }}
+            User ${{ secrets.VM_USER }}
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking no
+          
+          Host vm-c
+            HostName ${{ secrets.VM_C_IP }}
+            User ${{ secrets.VM_USER }}
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking no
+          CONFIG
 
       - name: Test connectivity
         run: |
-          ansible -i ansible/inventories/local/hosts.yml all -m ping || \
-          echo "::warning::Could not reach all hosts, proceeding anyway"
+          for vm in vm-a vm-b vm-c; do
+            ssh $vm "echo 'Connected to $vm'"
+          done
 
-      - name: Run preflight time check
+      - name: Deploy to staging
         run: |
-          ansible -i ansible/inventories/local/hosts.yml all \
-            -m shell -a 'command -v chronyc && chronyc tracking || echo "Chrony not installed"' || true
+          cd ansible
+          ansible-playbook -i inventories/staging/hosts.yml playbooks/site.yml
 
-      - name: Run playbook (check mode)
-        if: ${{ inputs.check_mode == true || inputs.check_mode == 'true' }}
+      - name: Run health checks
         run: |
-          ansible-playbook \
-            -i ansible/inventories/local/hosts.yml \
-            ansible/playbooks/${{ inputs.playbook || '10-base.yml' }} \
-            -e "serial=${{ inputs.serial || 1 }}" \
-            --check --diff
+          chmod +x scripts/healthcheck.sh
+          scripts/healthcheck.sh
 
-      - name: Run playbook
-        if: ${{ inputs.check_mode != true && inputs.check_mode != 'true' }}
+      - name: Notify deployment status
+        if: always()
         run: |
-          ansible-playbook \
-            -i ansible/inventories/local/hosts.yml \
-            ansible/playbooks/${{ inputs.playbook || '10-base.yml' }} \
-            -e "serial=${{ inputs.serial || 1 }}"
-
-      - name: Verify services
-        if: ${{ inputs.check_mode != true && inputs.check_mode != 'true' }}
-        run: |
-          if [ -f scripts/verify_services.sh ]; then
-            ./scripts/verify_services.sh vm-a vm-b vm-c || \
-            echo "::warning::Some services may not be healthy yet"
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment to staging successful!"
+          else
+            echo "❌ Deployment to staging failed!"
           fi
