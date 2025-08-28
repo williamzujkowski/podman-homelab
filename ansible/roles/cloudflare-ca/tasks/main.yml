@@ -1,0 +1,142 @@
+---
+# Cloudflare CA Certificate Management
+# Automates certificate lifecycle for internal services
+
+- name: Install required packages for certificate management
+  ansible.builtin.package:
+    name:
+      - python3-cryptography
+      - python3-requests
+      - openssl
+    state: present
+
+- name: Create certificate directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  loop:
+    - /etc/ssl/cloudflare
+    - /etc/ssl/cloudflare/certs
+    - /etc/ssl/cloudflare/keys
+    - /etc/ssl/cloudflare/ca
+
+- name: Generate private key for services
+  community.crypto.openssl_privatekey:
+    path: /etc/ssl/cloudflare/keys/homelab.key
+    size: 2048
+    type: RSA
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: Generate certificate signing request
+  community.crypto.openssl_csr:
+    path: /etc/ssl/cloudflare/homelab.csr
+    privatekey_path: /etc/ssl/cloudflare/keys/homelab.key
+    common_name: "*.homelab.grenlan.com"
+    subject_alt_name:
+      - "DNS:homelab.grenlan.com"
+      - "DNS:*.homelab.grenlan.com"
+      - "DNS:grafana.homelab.grenlan.com"
+      - "DNS:prometheus.homelab.grenlan.com"
+      - "DNS:loki.homelab.grenlan.com"
+    organization_name: "Grenlan Homelab"
+    country_name: "US"
+
+- name: Download Cloudflare Origin CA root certificate
+  ansible.builtin.get_url:
+    url: https://developers.cloudflare.com/ssl/static/origin_ca_rsa_root.pem
+    dest: /etc/ssl/cloudflare/ca/cloudflare-origin-ca.pem
+    mode: '0644'
+
+- name: Create self-signed certificate for initial setup
+  community.crypto.x509_certificate:
+    path: /etc/ssl/cloudflare/certs/homelab.crt
+    privatekey_path: /etc/ssl/cloudflare/keys/homelab.key
+    csr_path: /etc/ssl/cloudflare/homelab.csr
+    provider: selfsigned
+    selfsigned_not_after: "+365d"
+  when: cloudflare_origin_cert is not defined
+
+- name: Deploy Cloudflare Origin certificate if provided
+  ansible.builtin.copy:
+    content: "{{ cloudflare_origin_cert }}"
+    dest: /etc/ssl/cloudflare/certs/homelab.crt
+    mode: '0644'
+    owner: root
+    group: root
+    backup: yes
+  when: cloudflare_origin_cert is defined
+
+- name: Create certificate bundle for Caddy
+  ansible.builtin.shell: |
+    cat /etc/ssl/cloudflare/certs/homelab.crt \
+        /etc/ssl/cloudflare/ca/cloudflare-origin-ca.pem \
+        > /etc/ssl/cloudflare/homelab-bundle.crt
+  changed_when: true
+
+- name: Set up automatic certificate renewal check script
+  ansible.builtin.copy:
+    content: |
+      #!/usr/bin/env bash
+      # Check certificate expiry and alert if needed
+      
+      CERT_FILE="/etc/ssl/cloudflare/certs/homelab.crt"
+      DAYS_WARNING=30
+      
+      if [ -f "$CERT_FILE" ]; then
+          EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_FILE" | cut -d= -f2)
+          EXPIRY_EPOCH=$(date -d "$EXPIRY" +%s)
+          NOW_EPOCH=$(date +%s)
+          DAYS_LEFT=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))
+          
+          if [ $DAYS_LEFT -lt $DAYS_WARNING ]; then
+              echo "WARNING: Certificate expires in $DAYS_LEFT days (Expiry: $EXPIRY)"
+              logger -t cert-check "Certificate expires in $DAYS_LEFT days"
+          else
+              echo "Certificate valid for $DAYS_LEFT more days"
+          fi
+      else
+          echo "ERROR: Certificate file not found"
+          exit 1
+      fi
+    dest: /usr/local/bin/check-cert-expiry.sh
+    mode: '0755'
+
+- name: Create systemd timer for certificate check
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=Daily certificate expiry check
+      
+      [Timer]
+      OnCalendar=daily
+      Persistent=true
+      
+      [Install]
+      WantedBy=timers.target
+    dest: /etc/systemd/system/cert-check.timer
+    mode: '0644'
+
+- name: Create systemd service for certificate check
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=Check certificate expiry
+      
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/check-cert-expiry.sh
+      StandardOutput=journal
+    dest: /etc/systemd/system/cert-check.service
+    mode: '0644'
+
+- name: Enable and start certificate check timer
+  ansible.builtin.systemd:
+    name: cert-check.timer
+    state: started
+    enabled: yes
+    daemon_reload: yes

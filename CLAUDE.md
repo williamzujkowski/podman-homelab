@@ -1,36 +1,60 @@
 # **CLAUDE.md**
 
-> **Purpose:** Operational playbook for the **Claude CLI agent** in this repo. You work **locally first**, then help drive **GitHub-gated** deployments to VMs and, later, Pis. Your job is to **propose changes, test them, and open PRs**—not to YOLO into prod.
+> **Purpose:** Operational playbook for the **Claude CLI agent** in this repo. Infrastructure is **deployed to production Raspberry Pis**. Your job is to **propose changes, test locally, open PRs, and follow canary deployment patterns**—not to YOLO into prod.
+
+**Current Status:** ✅ **PRODUCTION DEPLOYED** - Services running on Raspberry Pi cluster (192.168.1.x)
 
 ---
 
-## 0) Golden rules
+## 0) Current Infrastructure State
 
-1. **Local → Staging VM → Prod**. Never target Pis until the VM staging run passes and a human approves the **`prod` environment** in GitHub. ([GitHub Docs][20])
-2. **Two SSH doors open** at all times: OpenSSH **and** Tailscale SSH. **Never** change both in the same PR. Tailscale SSH uses port 22 and doesn’t modify OpenSSH config. ([Tailscale][9])
+### Production Raspberry Pi Cluster
+| Node | IP | Role | Services |
+|------|-----|------|----------|
+| **pi-a** | 192.168.1.12 | Monitoring/Canary | Prometheus, Grafana, Loki |
+| **pi-b** | 192.168.1.11 | Ingress | Caddy/Traefik |
+| **pi-c** | 192.168.1.10 | Worker | Application services |
+| **pi-d** | 192.168.1.13 | Storage | MinIO, Backups |
+
+### Access Points
+- **Direct**: `http://192.168.1.12:3000` (Grafana), `http://192.168.1.12:9090` (Prometheus)
+- **Via Ingress**: `https://grafana.homelab.grenlan.com` (requires /etc/hosts entry)
+- **Certificate**: Cloudflare Origin CA (15-year validity)
+
+---
+
+## 1) Golden rules
+
+1. **Local → Staging VM → Prod**. Test locally first, then canary to pi-a, then roll out. ([GitHub Docs][20])
+2. **Two SSH doors open** at all times: OpenSSH **and** Tailscale SSH. **Never** change both in the same PR. Tailscale SSH uses port 22 and doesn't modify OpenSSH config. ([Tailscale][9])
 3. **Time is a hard gate**: deployments must verify `chronyc tracking` on targets; drift ≤100 ms, stratum ≤3. chrony should use `time.cloudflare.com nts` + NIST servers. ([Cloudflare Docs][5], [NIST][7])
 4. **Immutable containers**: deploy via **Quadlet** with **digest-pinned** images. Use **Renovate** to propose tag/digest bumps—do not pull `:latest`. ([docs.podman.io][2], [docs.renovatebot.com][14])
 5. **Everything via Ansible** with `containers.podman` modules. No ad-hoc host edits. ([Ansible][3])
+6. **Internal only**: Services must NOT be accessible from public internet. Use Cloudflare Origin CA but keep DNS records unproxied.
 
 ---
 
-## 1) Allowed operations
+## 2) Allowed operations
 
 * Edit Ansible roles/playbooks, inventories, Quadlet files, GitHub Workflows.
 * Run **lint/tests** locally (yamllint, ansible-lint, Molecule). ([ansible.readthedocs.io][4])
 * Open **PRs** with clear change logs, test notes, and rollback instructions.
 * Use **GitHub Environments** to route deployments; do not bypass required reviewers. ([GitHub Docs][27])
+* Deploy **Cloudflare Origin certificates** for internal HTTPS.
+* Configure **local-only network access** rules in Caddy/Traefik.
 
-## 2) Forbidden operations
+## 3) Forbidden operations
 
 * Direct, manual SSH changes on prod Pis.
 * Restarting both SSH planes in one PR.
 * Modifying time sources to leap-smeared + standard mix.
 * Using floating image tags in prod.
+* Exposing services to public internet (keep DNS records unproxied).
+* Bypassing canary deployment pattern (pi-a first, then others).
 
 ---
 
-## 3) Local toolchain expectations
+## 4) Local toolchain expectations
 
 * **Podman** installed locally; use **Quadlet** for systemd-managed test units. ([docs.podman.io][2])
 * **Multipass** for quick Ubuntu VMs (preferred) or **QEMU/KVM** + cloud-init NoCloud (for ARM emulation). ([Ubuntu Documentation][17], [Cloud-Init][19])
@@ -38,7 +62,7 @@
 
 ---
 
-## 4) Required preflight before any remote apply
+## 5) Required preflight before any remote apply
 
 ```bash
 # 1) Time gate (abort if drift > 0.1s or stratum > 3)
@@ -59,7 +83,7 @@ server time.nist.gov iburst
 
 ---
 
-## 5) Change workflow (you must follow this)
+## 6) Change workflow (you must follow this)
 
 1. **Plan & lint**
 
@@ -95,7 +119,7 @@ If anything fails → **revert digest** and re-apply to canary.
 
 ---
 
-## 6) Typical tasks (prompt templates)
+## 7) Typical tasks (prompt templates)
 
 **A. Update a service image safely**
 
@@ -113,7 +137,7 @@ If anything fails → **revert digest** and re-apply to canary.
 
 ---
 
-## 7) GitHub specifics you will use
+## 8) GitHub specifics you will use
 
 * **Environments & Required Reviewers**: add `environment: staging` / `environment: prod` to jobs; human must **Approve and deploy** to continue. ([GitHub Docs][20])
 * **Tailscale Action** in workflows to reach private nodes during deploys. ([GitHub][23])
@@ -121,7 +145,7 @@ If anything fails → **revert digest** and re-apply to canary.
 
 ---
 
-## 8) Reference links (for you)
+## 9) Reference links (for you)
 
 * **Quadlet & systemd**; **podman-auto-update** (timer defaults). ([docs.podman.io][2])
 * **containers.podman** collection; **Molecule Podman** example. ([Ansible][3], [ansible.readthedocs.io][4])
@@ -133,11 +157,45 @@ If anything fails → **revert digest** and re-apply to canary.
 
 ---
 
-## 9) Emergency rollbacks
+## 10) Emergency rollbacks
 
 * **Containers**: revert to previous **digest**; re-apply to canary (`serial: 1`), then full.
 * **Ingress**: keep prior unit file; `systemctl revert`/switch symlink.
 * **SSH**: if OpenSSH path gets borked, use **Tailscale SSH** (policy-based, port 22) to revert the drop-in. ([Tailscale][9])
+
+---
+
+## 11) Production Access Information
+
+### Direct Access URLs (Internal Network Only)
+- **Grafana**: http://192.168.1.12:3000 (admin/admin)
+- **Prometheus**: http://192.168.1.12:9090
+- **Loki**: http://192.168.1.12:3100
+
+### HTTPS Access (with Cloudflare Origin CA)
+Add to `/etc/hosts`:
+```
+192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com
+```
+
+Then access:
+- https://grafana.homelab.grenlan.com
+- https://prometheus.homelab.grenlan.com
+- https://loki.homelab.grenlan.com
+
+### Quick Commands
+```bash
+# Check all services
+curl -s http://192.168.1.12:9090/-/healthy  # Prometheus
+curl -s http://192.168.1.12:3000/api/health  # Grafana
+curl -s http://192.168.1.12:3100/ready       # Loki
+
+# SSH to nodes
+ssh pi@192.168.1.12  # pi-a (monitoring)
+ssh pi@192.168.1.11  # pi-b (ingress)
+ssh pi@192.168.1.10  # pi-c (worker)
+ssh pi@192.168.1.13  # pi-d (storage)
+```
 
 ---
 

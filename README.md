@@ -1,10 +1,12 @@
 # Podman Homelab
 
-A production-grade homelab infrastructure using Podman, Ansible, and GitHub CI/CD for managing a Raspberry Pi cluster.
+A **production-deployed** homelab infrastructure using Podman, Ansible, Cloudflare CA, and GitHub CI/CD for managing a Raspberry Pi cluster.
+
+**Status:** ✅ **PRODUCTION** - All services operational on Raspberry Pi cluster
 
 ## Overview
 
-This repository implements a complete infrastructure-as-code solution for deploying and managing containerized services across a 3-node Raspberry Pi 5 cluster. The deployment pipeline follows a strict progression: **Local Development → VM Staging → Production Pis**.
+This repository implements a complete infrastructure-as-code solution for deploying and managing containerized services across a 4-node Raspberry Pi 5 cluster with Cloudflare Origin CA certificates. The deployment pipeline follows a strict progression: **Local Development → VM Staging → Canary (pi-a) → Production Pis**.
 
 ### Key Features
 
@@ -14,7 +16,35 @@ This repository implements a complete infrastructure-as-code solution for deploy
 - **Time Discipline**: Chrony with NTS (Cloudflare) + NIST servers, hard gates on drift
 - **SSH Redundancy**: Dual access paths via OpenSSH and Tailscale SSH
 - **Observability**: Prometheus, Grafana, Loki, and node_exporter
-- **Security**: Unattended upgrades, UFW firewall, fail2ban, digest-pinned containers
+- **Security**: Cloudflare Origin CA (15-year certs), UFW firewall, internal-only access
+- **Certificate Management**: Automated lifecycle with Cloudflare Origin CA
+
+### Production Infrastructure
+
+| Node | IP | Role | Services |
+|------|-----|------|----------|
+| **pi-a** | 192.168.1.12 | Monitoring/Canary | Prometheus, Grafana, Loki, Promtail |
+| **pi-b** | 192.168.1.11 | Ingress | Caddy with Cloudflare CA |
+| **pi-c** | 192.168.1.10 | Worker | Application services |
+| **pi-d** | 192.168.1.13 | Storage | MinIO, Backup services |
+
+## Access Services
+
+### Direct Access (Internal Network Only)
+- **Grafana**: http://192.168.1.12:3000 (admin/admin)
+- **Prometheus**: http://192.168.1.12:9090
+- **Loki**: http://192.168.1.12:3100
+
+### HTTPS Access via Cloudflare CA
+Add to `/etc/hosts`:
+```
+192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com
+```
+
+Then access:
+- https://grafana.homelab.grenlan.com
+- https://prometheus.homelab.grenlan.com
+- https://loki.homelab.grenlan.com
 
 ## Quick Start
 

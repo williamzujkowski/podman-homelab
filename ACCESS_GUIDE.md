@@ -1,38 +1,46 @@
 # Homelab Infrastructure Access Guide
 
-**Last Updated:** 2025-08-27  
+**Last Updated:** 2025-08-28  
+**Environment:** PRODUCTION (Raspberry Pi Cluster)  
 **Status:** ✅ OPERATIONAL
 
 ## 🚀 Quick Access
 
-### Direct Service URLs
+### Direct Service URLs (Internal Network Only)
 
 | Service | URL | Credentials | Status |
 |---------|-----|-------------|--------|
-| **Prometheus** | http://10.14.185.35:9090 | None | ✅ Running |
-| **Grafana** | http://10.14.185.35:3000 | admin/admin | ✅ Running |
-| **Loki** | http://10.14.185.35:3100 | None | ✅ Running |
-| **Node Exporter (vm-a)** | http://10.14.185.35:9100/metrics | None | ✅ Running |
-| **Node Exporter (vm-b)** | http://10.14.185.67:9100/metrics | None | ✅ Running |
-| **Node Exporter (vm-c)** | http://10.14.185.213:9100/metrics | None | ✅ Running |
+| **Prometheus** | http://192.168.1.12:9090 | None | ✅ Running |
+| **Grafana** | http://192.168.1.12:3000 | admin/admin | ✅ Running |
+| **Loki** | http://192.168.1.12:3100 | None | ✅ Running |
+| **Node Exporter (pi-a)** | http://192.168.1.12:9100/metrics | None | ✅ Running |
+| **Node Exporter (pi-b)** | http://192.168.1.11:9100/metrics | None | ✅ Running |
+| **Node Exporter (pi-c)** | http://192.168.1.10:9100/metrics | None | ✅ Running |
+| **Node Exporter (pi-d)** | http://192.168.1.13:9100/metrics | None | ✅ Running |
 
-### Ingress URLs (via Caddy on vm-b)
+### Ingress URLs (via Caddy/Traefik on pi-b)
 
 | Service | URL | Notes |
 |---------|-----|-------|
-| **Prometheus** | https://prometheus.local | Self-signed cert |
-| **Grafana** | https://grafana.local | Self-signed cert |
-| **Loki** | https://loki.local | Self-signed cert |
+| **Prometheus** | https://prometheus.homelab.grenlan.com | Cloudflare Origin CA |
+| **Grafana** | https://grafana.homelab.grenlan.com | Cloudflare Origin CA |
+| **Loki** | https://loki.homelab.grenlan.com | Cloudflare Origin CA |
+
+**Note**: Add these to your `/etc/hosts` file:
+```
+192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com
+```
 
 ## 📊 Infrastructure Overview
 
-### Virtual Machines
+### Raspberry Pi Cluster
 
-| VM | IP Address | Role | Services |
-|----|------------|------|----------|
-| **vm-a** | 10.14.185.35 | Observability | Prometheus, Grafana, Loki, Promtail |
-| **vm-b** | 10.14.185.67 | Ingress | Caddy, Node Exporter, Promtail |
-| **vm-c** | 10.14.185.213 | Applications | Node Exporter |
+| Node | IP Address | Role | Services |
+|------|------------|------|----------|
+| **pi-a** | 192.168.1.12 | Monitoring/Canary | Prometheus, Grafana, Loki, Promtail |
+| **pi-b** | 192.168.1.11 | Ingress | Caddy/Traefik, Node Exporter |
+| **pi-c** | 192.168.1.10 | Worker/Apps | Application services, Node Exporter |
+| **pi-d** | 192.168.1.13 | Storage/Backup | MinIO, Backup services, Node Exporter |
 
 ### Service Status Summary
 
@@ -52,44 +60,46 @@
 ./scripts/healthcheck.sh
 
 # Check time synchronization (must be < 100ms drift, stratum ≤ 3)
-ansible staging -i ansible/inventories/local/hosts.yml -m shell -a "chronyc tracking"
+ansible pis -i ansible/inventories/prod/hosts.yml -m shell -a "chronyc tracking"
 
 # Check SSH redundancy
-./scripts/preflight_ssh.sh 10.14.185.35  # vm-a
-./scripts/preflight_ssh.sh 10.14.185.67  # vm-b
-./scripts/preflight_ssh.sh 10.14.185.213 # vm-c
+./scripts/preflight_ssh.sh 192.168.1.12  # pi-a
+./scripts/preflight_ssh.sh 192.168.1.11  # pi-b
+./scripts/preflight_ssh.sh 192.168.1.10  # pi-c
+./scripts/preflight_ssh.sh 192.168.1.13  # pi-d
 ```
 
 ### View Container Status
 
 ```bash
-# Check containers on each VM
-ansible vm-a -i ansible/inventories/local/hosts.yml -m command -a "sudo podman ps"
-ansible vm-b -i ansible/inventories/local/hosts.yml -m command -a "sudo podman ps"
-ansible vm-c -i ansible/inventories/local/hosts.yml -m command -a "sudo podman ps"
+# Check containers on each Pi
+ansible pi-a -i ansible/inventories/prod/hosts.yml -m command -a "sudo podman ps"
+ansible pi-b -i ansible/inventories/prod/hosts.yml -m command -a "sudo podman ps"
+ansible pi-c -i ansible/inventories/prod/hosts.yml -m command -a "sudo podman ps"
+ansible pi-d -i ansible/inventories/prod/hosts.yml -m command -a "sudo podman ps"
 ```
 
 ### View Logs
 
 ```bash
 # View Prometheus logs
-ansible vm-a -i ansible/inventories/local/hosts.yml -m shell -a "sudo podman logs --tail 50 prometheus"
+ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo podman logs --tail 50 prometheus"
 
 # View Grafana logs
-ansible vm-a -i ansible/inventories/local/hosts.yml -m shell -a "sudo podman logs --tail 50 grafana"
+ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo podman logs --tail 50 grafana"
 
 # View Loki logs
-ansible vm-a -i ansible/inventories/local/hosts.yml -m shell -a "sudo podman logs --tail 50 loki"
+ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo podman logs --tail 50 loki"
 
-# View Caddy logs
-ansible vm-b -i ansible/inventories/local/hosts.yml -m shell -a "sudo podman logs --tail 50 caddy"
+# View Caddy/Traefik logs
+ansible pi-b -i ansible/inventories/prod/hosts.yml -m shell -a "sudo podman logs --tail 50 caddy"
 ```
 
 ## 🔍 Monitoring & Metrics
 
 ### Prometheus Targets
 
-Check target status at: http://10.14.185.35:9090/targets
+Check target status at: http://192.168.1.12:9090/targets
 
 Current targets:
 - ✅ `node` job: 3/3 instances UP (all VMs)
@@ -99,7 +109,7 @@ Current targets:
 
 ### Grafana Dashboards
 
-1. Access Grafana: http://10.14.185.35:3000
+1. Access Grafana: http://192.168.1.12:3000
 2. Login: admin/admin
 3. Available datasources:
    - Prometheus (configured)
@@ -162,13 +172,16 @@ ansible <vm-name> -i ansible/inventories/local/hosts.yml -m command -a "sudo chr
 ```bash
 # Run specific playbook
 cd ansible
-ansible-playbook -i inventories/local/hosts.yml playbooks/<playbook-name>.yml
+ansible-playbook -i inventories/prod/hosts.yml playbooks/<playbook-name>.yml
 
-# Deploy to all staging VMs
-ansible-playbook -i inventories/local/hosts.yml playbooks/00-bootstrap.yml
-ansible-playbook -i inventories/local/hosts.yml playbooks/20-podman.yml
-ansible-playbook -i inventories/local/hosts.yml playbooks/30-observability.yml
-ansible-playbook -i inventories/local/hosts.yml playbooks/41-deploy-caddy.yml
+# Deploy to production Pis (follow canary pattern)
+ansible-playbook -i inventories/prod/hosts.yml playbooks/00-bootstrap.yml --limit pi-a
+ansible-playbook -i inventories/prod/hosts.yml playbooks/20-podman.yml --limit pi-a
+ansible-playbook -i inventories/prod/hosts.yml playbooks/30-observability.yml --limit pi-a
+# If successful, roll out to remaining nodes
+ansible-playbook -i inventories/prod/hosts.yml playbooks/00-bootstrap.yml
+ansible-playbook -i inventories/prod/hosts.yml playbooks/20-podman.yml
+ansible-playbook -i inventories/prod/hosts.yml playbooks/30-observability.yml
 ```
 
 ### Validate Deployment
@@ -185,28 +198,67 @@ ansible-playbook -i inventories/local/hosts.yml playbooks/41-deploy-caddy.yml
 ### Update Container Images
 ```bash
 # Check for updates (manual - auto-update disabled for stability)
-ansible staging -i ansible/inventories/local/hosts.yml -m command -a "sudo podman auto-update --dry-run"
+ansible pis -i ansible/inventories/prod/hosts.yml -m command -a "sudo podman auto-update --dry-run"
 
 # Apply updates to specific container
-ansible <vm-name> -i ansible/inventories/local/hosts.yml -m shell -a "sudo podman pull <image> && sudo systemctl restart <service>"
+ansible <pi-name> -i ansible/inventories/prod/hosts.yml -m shell -a "sudo podman pull <image> && sudo systemctl restart <service>"
 ```
 
 ### Backup & Restore
 ```bash
 # Backup Prometheus data
-ansible vm-a -i ansible/inventories/local/hosts.yml -m shell -a "sudo tar -czf /tmp/prometheus-backup.tar.gz /var/lib/containers/storage/volumes/prometheus-data"
+ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo tar -czf /tmp/prometheus-backup.tar.gz /var/lib/containers/storage/volumes/prometheus-data"
 
 # Backup Grafana data
-ansible vm-a -i ansible/inventories/local/hosts.yml -m shell -a "sudo tar -czf /tmp/grafana-backup.tar.gz /var/lib/containers/storage/volumes/grafana-data"
+ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo tar -czf /tmp/grafana-backup.tar.gz /var/lib/containers/storage/volumes/grafana-data"
+
+# Backup to pi-d (storage node)
+ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo rsync -avz /tmp/*.tar.gz pi@192.168.1.13:/storage/backups/"
 ```
 
 ## 🔐 Security Notes
 
-- All services are currently using HTTP (not HTTPS) for internal communication
-- Caddy has generated self-signed certificates for *.local domains
-- Firewall (UFW) is enabled on all VMs
+- Internal services use HTTPS with Cloudflare Origin CA certificates (15-year validity)
+- Services are only accessible from local network (192.168.1.0/24)
+- No public internet access - DNS records are not proxied through Cloudflare
+- Firewall (UFW) is enabled on all Pis with strict ingress rules
 - SSH hardening is in place with key-only authentication
 - Rootless Podman is configured for container security
+- Time synchronization enforced (< 100ms drift, stratum ≤ 3)
+
+## 🌐 Cloudflare Integration
+
+### Certificate Management
+- **Type**: Cloudflare Origin CA certificates
+- **Validity**: 15 years (expires 2040)
+- **Coverage**: `*.homelab.grenlan.com`, `homelab.grenlan.com`
+- **Location**: `/etc/ssl/cloudflare/` on pi-b
+
+### DNS Configuration
+```bash
+# Add to your local /etc/hosts file:
+192.168.1.11  homelab.grenlan.com
+192.168.1.11  grafana.homelab.grenlan.com
+192.168.1.11  prometheus.homelab.grenlan.com
+192.168.1.11  loki.homelab.grenlan.com
+```
+
+### Certificate Setup
+```bash
+# Generate new Origin certificate (if needed)
+cd ansible
+./scripts/setup-cloudflare-ca.sh
+
+# Or deploy existing certificate
+ansible-playbook -i inventories/prod/hosts.yml \
+  playbooks/42-cloudflare-ca.yml \
+  -e "cloudflare_origin_cert='<cert-content>'"
+```
+
+### Network Security
+- Services blocked from external access via Caddy rules
+- Only accessible from: 192.168.1.0/24, 10.0.0.0/8, 172.16.0.0/12
+- External requests receive 403 Forbidden
 
 ## 📝 Next Steps for Production
 
