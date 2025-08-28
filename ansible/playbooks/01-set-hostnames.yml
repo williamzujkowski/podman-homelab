@@ -59,4 +59,3 @@
         name: systemd-resolved
         state: restarted
         daemon_reload: yes
-

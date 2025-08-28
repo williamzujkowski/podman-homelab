@@ -45,10 +45,13 @@
 
             - job_name: 'node'
               static_configs:
-                - targets:
-                  - '{{ hostvars["vm-a"]["ansible_host"] }}:9100'
-                  - '{{ hostvars["vm-b"]["ansible_host"] }}:9100'
-                  - '{{ hostvars["vm-c"]["ansible_host"] }}:9100'
+                - targets: >-
+                    {{
+                      groups['staging']
+                      | map('extract', hostvars, 'ansible_host')
+                      | map('regex_replace', '^(.*)$', '\1:9100')
+                      | list
+                    }}
 
             - job_name: 'grafana'
               static_configs:
@@ -106,7 +109,7 @@
             filename: /tmp/positions.yaml
 
           clients:
-            - url: http://{{ hostvars["vm-a"]["ansible_host"] }}:3100/loki/api/v1/push
+            - url: http://{{ hostvars[groups['observability'][0]]["ansible_host"] }}:3100/loki/api/v1/push
 
           scrape_configs:
             - job_name: journal
@@ -115,7 +118,7 @@
                 max_age: 12h
                 labels:
                   job: systemd-journal
-                  host: {{ inventory_hostname }}
+                  host: "{{ inventory_hostname }}"
               relabel_configs:
                 - source_labels: ['__journal__systemd_unit']
                   target_label: 'unit'

@@ -15,7 +15,9 @@
 
     - name: Download step-ca archive
       get_url:
-        url: "https://github.com/smallstep/certificates/releases/download/v{{ step_ca_version }}/step-ca_linux_{{ step_ca_version }}_{{ step_arch }}.tar.gz"
+        url: >-
+          https://github.com/smallstep/certificates/releases/download/v{{ step_ca_version }}/
+          step-ca_linux_{{ step_ca_version }}_{{ step_arch }}.tar.gz
         dest: /tmp/step-ca.tar.gz
         mode: '0644'
       become: true

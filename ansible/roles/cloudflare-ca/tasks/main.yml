@@ -83,16 +83,16 @@
     content: |
       #!/usr/bin/env bash
       # Check certificate expiry and alert if needed
-      
+
       CERT_FILE="/etc/ssl/cloudflare/certs/homelab.crt"
       DAYS_WARNING=30
-      
+
       if [ -f "$CERT_FILE" ]; then
           EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_FILE" | cut -d= -f2)
           EXPIRY_EPOCH=$(date -d "$EXPIRY" +%s)
           NOW_EPOCH=$(date +%s)
           DAYS_LEFT=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))
-          
+
           if [ $DAYS_LEFT -lt $DAYS_WARNING ]; then
               echo "WARNING: Certificate expires in $DAYS_LEFT days (Expiry: $EXPIRY)"
               logger -t cert-check "Certificate expires in $DAYS_LEFT days"
@@ -111,11 +111,11 @@
     content: |
       [Unit]
       Description=Daily certificate expiry check
-      
+
       [Timer]
       OnCalendar=daily
       Persistent=true
-      
+
       [Install]
       WantedBy=timers.target
     dest: /etc/systemd/system/cert-check.timer
@@ -126,7 +126,7 @@
     content: |
       [Unit]
       Description=Check certificate expiry
-      
+
       [Service]
       Type=oneshot
       ExecStart=/usr/local/bin/check-cert-expiry.sh

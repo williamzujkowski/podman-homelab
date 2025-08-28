@@ -95,7 +95,7 @@ jobs:
       - name: Deploy to staging
         run: |
           cd ansible
-          ansible-playbook -i inventories/staging/hosts.yml playbooks/site.yml
+          ansible-playbook -i inventories/local/hosts.yml playbooks/site.yml
 
       - name: Run health checks
         run: |

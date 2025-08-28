@@ -16,7 +16,9 @@
 
     - name: Download step CLI
       get_url:
-        url: "https://github.com/smallstep/cli/releases/download/v{{ step_cli_version }}/step_linux_{{ step_cli_version }}_{{ step_arch }}.tar.gz"
+        url: >-
+          https://github.com/smallstep/cli/releases/download/v{{ step_cli_version }}/
+          step_linux_{{ step_cli_version }}_{{ step_arch }}.tar.gz
         dest: /tmp/step-cli.tar.gz
         mode: '0644'
 

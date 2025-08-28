@@ -3,7 +3,9 @@
 
 - name: Add Podman repository key (if using kubic)
   ansible.builtin.get_url:
-    url: "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_{{ ansible_distribution_version }}/Release.key"
+    url: >-
+      https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/
+      xUbuntu_{{ ansible_distribution_version }}/Release.key
     dest: /usr/share/keyrings/libcontainers-archive-keyring.gpg
     mode: '0644'
   become: yes
@@ -12,9 +14,10 @@
 - name: Add Podman repository (if using kubic)
   ansible.builtin.apt_repository:
     repo: >-
-      deb [arch={{ ansible_architecture }} signed-by=/usr/share/keyrings/libcontainers-archive-keyring.gpg]
-      https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_{{ ansible_distribution_version }}/
-      /
+      deb [arch={{ ansible_architecture }}
+      signed-by=/usr/share/keyrings/libcontainers-archive-keyring.gpg]
+      https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/
+      xUbuntu_{{ ansible_distribution_version }}/ /
     state: present
     filename: libcontainers
   become: yes

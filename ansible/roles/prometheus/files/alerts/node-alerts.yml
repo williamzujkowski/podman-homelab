@@ -1,3 +1,4 @@
+---
 groups:
   - name: node_alerts
     interval: 30s
@@ -30,7 +31,9 @@ groups:
           description: "Memory usage on {{ $labels.instance }} is above 90% (current: {{ $value }}%)"
 
       - alert: DiskSpaceLow
-        expr: 100 - ((node_filesystem_avail_bytes{mountpoint="/",fstype!="rootfs"} * 100) / node_filesystem_size_bytes{mountpoint="/",fstype!="rootfs"}) > 85
+        expr: >
+          100 - ((node_filesystem_avail_bytes{mountpoint="/",fstype!="rootfs"} * 100) /
+          node_filesystem_size_bytes{mountpoint="/",fstype!="rootfs"}) > 85
         for: 10m
         labels:
           severity: warning
