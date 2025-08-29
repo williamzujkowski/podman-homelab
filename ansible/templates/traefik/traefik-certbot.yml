@@ -1,0 +1,46 @@
+# Traefik configuration using certbot-generated certificates
+
+api:
+  dashboard: true
+  debug: false
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  
+  websecure:
+    address: ":443"
+  
+  metrics:
+    address: ":8082"
+
+providers:
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addServicesLabels: true
+
+log:
+  level: INFO
+  filePath: /var/log/traefik/traefik.log
+
+accessLog:
+  filePath: /var/log/traefik/access.log
+
+ping:
+  entryPoint: web
+
+serversTransport:
+  insecureSkipVerify: true

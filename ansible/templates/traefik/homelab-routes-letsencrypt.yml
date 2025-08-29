@@ -1,0 +1,82 @@
+http:
+  routers:
+    # Homelab subdomain routes with Let's Encrypt
+    homelab-main:
+      rule: "Host(`homelab.grenlan.com`)"
+      service: grafana
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "homelab.grenlan.com"
+    
+    grafana-homelab:
+      rule: "Host(`grafana.homelab.grenlan.com`)"
+      service: grafana
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "grafana.homelab.grenlan.com"
+    
+    prometheus-homelab:
+      rule: "Host(`prometheus.homelab.grenlan.com`)"
+      service: prometheus
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "prometheus.homelab.grenlan.com"
+    
+    loki-homelab:
+      rule: "Host(`loki.homelab.grenlan.com`)"
+      service: loki
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "loki.homelab.grenlan.com"
+    
+    # Wildcard certificate route (optional - requires wildcard in DNS)
+    wildcard-homelab:
+      rule: "HostRegexp(`{subdomain:[a-z]+}.homelab.grenlan.com`)"
+      service: grafana
+      priority: 1
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "*.homelab.grenlan.com"
+  
+  services:
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.1.12:3000"
+        healthCheck:
+          path: /api/health
+          interval: 30s
+          timeout: 3s
+    
+    prometheus:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.1.12:9090"
+        healthCheck:
+          path: /-/healthy
+          interval: 30s
+          timeout: 3s
+    
+    loki:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.1.12:3100"
+        healthCheck:
+          path: /ready
+          interval: 30s
+          timeout: 3s

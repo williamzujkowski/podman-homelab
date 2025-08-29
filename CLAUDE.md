@@ -157,31 +157,60 @@ If anything fails → **revert digest** and re-apply to canary.
 
 ---
 
-## 10) Emergency rollbacks
+## 10) TLS Certificate Management
+
+### Let's Encrypt via Certbot
+Certificates are managed independently from Traefik using certbot with Cloudflare DNS-01 challenge.
+
+* **Location**: `/etc/letsencrypt/live/homelab.grenlan.com/` on pi-b (192.168.1.11)
+* **Traefik integration**: Certificates copied to `/etc/traefik/certs/` for container access
+* **Auto-renewal**: Systemd timer (`certbot-renew.timer`) runs twice daily
+* **Renewal hook**: Automatically restarts Traefik on successful renewal
+* **Expiry**: 90 days (renews ~30 days before expiry)
+
+### Certificate Commands
+```bash
+# Manual renewal test (dry run)
+ssh pi@192.168.1.11 "sudo /opt/certbot-env/bin/certbot renew --dry-run"
+
+# Check certificate status
+ssh pi@192.168.1.11 "sudo /opt/certbot-env/bin/certbot certificates"
+
+# View renewal timer status
+ssh pi@192.168.1.11 "sudo systemctl status certbot-renew.timer"
+
+# Force certificate copy to Traefik (if needed)
+ssh pi@192.168.1.11 "sudo cp /etc/letsencrypt/live/homelab.grenlan.com/*.pem /etc/traefik/certs/ && podman restart systemd-traefik"
+```
+
+## 11) Emergency rollbacks
 
 * **Containers**: revert to previous **digest**; re-apply to canary (`serial: 1`), then full.
 * **Ingress**: keep prior unit file; `systemctl revert`/switch symlink.
 * **SSH**: if OpenSSH path gets borked, use **Tailscale SSH** (policy-based, port 22) to revert the drop-in. ([Tailscale][9])
+* **Certificates**: Previous certs remain in `/etc/letsencrypt/archive/`. To rollback: `sudo cp /etc/letsencrypt/archive/homelab.grenlan.com/*1.pem /etc/traefik/certs/`
 
 ---
 
-## 11) Production Access Information
+## 12) Production Access Information
 
 ### Direct Access URLs (Internal Network Only)
 - **Grafana**: http://192.168.1.12:3000 (admin/admin)
 - **Prometheus**: http://192.168.1.12:9090
 - **Loki**: http://192.168.1.12:3100
 
-### HTTPS Access (with Cloudflare Origin CA)
+### HTTPS Access (with Let's Encrypt)
+Certificates are managed via certbot with Cloudflare DNS-01 challenge.
+
 Add to `/etc/hosts`:
 ```
 192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com
 ```
 
 Then access:
-- https://grafana.homelab.grenlan.com
-- https://prometheus.homelab.grenlan.com
-- https://loki.homelab.grenlan.com
+- https://grafana.homelab.grenlan.com (browser-trusted ✅)
+- https://prometheus.homelab.grenlan.com (browser-trusted ✅)
+- https://loki.homelab.grenlan.com (browser-trusted ✅)
 
 ### Quick Commands
 ```bash

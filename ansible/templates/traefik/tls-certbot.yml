@@ -1,0 +1,27 @@
+# TLS configuration using certbot-generated Let's Encrypt certificates
+
+tls:
+  certificates:
+    # Let's Encrypt certificate from certbot
+    - certFile: /etc/letsencrypt/live/homelab.grenlan.com/fullchain.pem
+      keyFile: /etc/letsencrypt/live/homelab.grenlan.com/privkey.pem
+      stores:
+        - default
+  
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/letsencrypt/live/homelab.grenlan.com/fullchain.pem
+        keyFile: /etc/letsencrypt/live/homelab.grenlan.com/privkey.pem
+  
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: false
+      cipherSuites:
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+        - TLS_AES_128_GCM_SHA256
+        - TLS_AES_256_GCM_SHA384
+        - TLS_CHACHA20_POLY1305_SHA256

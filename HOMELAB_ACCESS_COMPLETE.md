@@ -33,16 +33,16 @@ ssh -L 3000:localhost:3000 \
 # Loki: http://localhost:3100
 ```
 
-### 🟢 HTTPS Access (Working!)
+### 🟢 HTTPS Access (Browser-Trusted!)
 
 | Service | HTTPS URL | Status | Notes |
 |---------|-----------|--------|-------|
-| Grafana | https://grafana.homelab.grenlan.com | ✅ Working | Dashboards & Visualization |
-| Prometheus | https://prometheus.homelab.grenlan.com | ✅ Working | Metrics Database |
+| Grafana | https://grafana.homelab.grenlan.com | ✅ Working | Let's Encrypt Certificate |
+| Prometheus | https://prometheus.homelab.grenlan.com | ✅ Working | Let's Encrypt Certificate |
 | Loki | https://loki.homelab.grenlan.com | ⚠️ Service Down | Needs restart |
-| Homelab | https://homelab.grenlan.com | ✅ Working | Main portal |
+| Homelab | https://homelab.grenlan.com | ✅ Working | Let's Encrypt Certificate |
 
-**Note:** Cloudflare Origin CA certificates are installed and working! SNI issue has been resolved.
+**Note:** Let's Encrypt certificates are active! Browser-trusted TLS with auto-renewal every 60 days.
 
 ## Infrastructure Overview
 
@@ -144,21 +144,44 @@ ssh -L 3000:localhost:3000 \
    dig @192.168.1.1 grafana.homelab.grenlan.com  # Query UDM Pro
    ```
 
-### HTTPS Now Working!
-The SNI issue has been resolved with updated Traefik configuration.
+### HTTPS with Let's Encrypt!
+Browser-trusted certificates via certbot with Cloudflare DNS-01 challenge.
 
 **Current Status:**
-- ✅ Certificates generated (15-year Cloudflare Origin CA)
-- ✅ Certificates deployed to `/etc/ssl/cloudflare/`
-- ✅ Traefik configured with certificates
-- ✅ SNI handshake fixed - HTTPS access working!
+- ✅ Let's Encrypt certificates generated via DNS-01 challenge
+- ✅ Certificates deployed to `/etc/letsencrypt/live/homelab.grenlan.com/`
+- ✅ Traefik configured to use certbot certificates
+- ✅ Auto-renewal configured (systemd timer twice daily)
+- ✅ Browser-trusted HTTPS access working!
 
 ## Security Notes
 
 1. **All services are internal only** - Not accessible from the internet
 2. **Cloudflare DNS is proxied** - Public DNS doesn't reveal internal IPs
-3. **Certificates are valid for 15 years** - Expire ~2040
+3. **Let's Encrypt certificates** - Valid for 90 days with auto-renewal
 4. **Use SSH tunneling for remote access** - Most secure method
+
+## Certificate Management
+
+### Check Certificate Status
+```bash
+ssh pi@192.168.1.11 "sudo /opt/certbot-env/bin/certbot certificates"
+```
+
+### Test Certificate Renewal
+```bash
+ssh pi@192.168.1.11 "sudo /opt/certbot-env/bin/certbot renew --dry-run"
+```
+
+### View Auto-Renewal Timer
+```bash
+ssh pi@192.168.1.11 "sudo systemctl status certbot-renew.timer"
+```
+
+### Manual Certificate Update to Traefik
+```bash
+ssh pi@192.168.1.11 "sudo cp /etc/letsencrypt/live/homelab.grenlan.com/*.pem /etc/traefik/certs/ && podman restart systemd-traefik"
+```
 
 ## Common Tasks
 
