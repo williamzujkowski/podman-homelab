@@ -1,0 +1,13 @@
+# Fixed TLS configuration for Traefik v3.1
+# This resolves SNI handshake issues
+
+tls:
+  certificates:
+    # Cloudflare Origin Certificate
+    - certFile: /etc/ssl/cloudflare/cloudflare-origin.crt
+      keyFile: /etc/ssl/cloudflare/cloudflare-origin.key
+  
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: false
