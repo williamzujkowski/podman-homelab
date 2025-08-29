@@ -1,13 +1,31 @@
 ---
-# Observability stack deployment playbook
-- name: Deploy observability stack
-  hosts: all
+# Observability stack deployment playbook for Pi cluster
+- name: Deploy Node Exporter on all Pi nodes
+  hosts: pis
+  gather_facts: yes
+  become: yes
+  serial: "{{ serial | default(1) }}"
+  
+  roles:
+    - node_exporter
+
+- name: Deploy Promtail on all Pi nodes 
+  hosts: pis
+  gather_facts: yes
+  become: yes
+  serial: "{{ serial | default(1) }}"
+  
+  roles:
+    - promtail
+
+- name: Deploy monitoring stack on monitoring nodes
+  hosts: monitoring_nodes
   gather_facts: yes
   become: yes
   serial: "{{ serial | default(1) }}"
 
   pre_tasks:
-    - name: Check Podman deployment
+    - name: Check Podman deployment (for Loki container)
       ansible.builtin.stat:
         path: /etc/ansible/facts.d/podman.fact
       register: podman_check
@@ -17,225 +35,104 @@
         msg: "Podman not deployed. Run 20-podman.yml first."
       when: not podman_check.stat.exists
 
-    - name: Create config directories
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: directory
-        mode: '0755'
-      loop:
-        - /etc/prometheus
-        - /etc/grafana
-        - /etc/loki
-        - /etc/promtail
-        - /etc/caddy
-        - /etc/containers/systemd
+    - name: Verify time synchronization (CLAUDE.md compliance)
+      ansible.builtin.shell: |
+        chronyc tracking | grep -E "Reference time|Stratum|System time" || exit 1
+        # Check drift and stratum requirements
+        chronyc tracking | awk '/System time/ {if ($4 > 0.1) exit 1}'
+        chronyc tracking | awk '/Stratum/ {if ($3 > 3) exit 1}'
+      changed_when: false
+      failed_when: false
+      register: time_check
+    
+    - name: Fail if time synchronization requirements not met
+      ansible.builtin.fail:
+        msg: "Time synchronization requirements not met. Drift must be ≤100ms, stratum ≤3."
+      when: time_check.rc != 0
+
+  roles:
+    - monitoring
 
   tasks:
-    - name: Deploy Prometheus configuration
-      ansible.builtin.copy:
-        content: |
-          global:
-            scrape_interval: 15s
-            evaluation_interval: 15s
+    - name: Verify Prometheus is accessible
+      ansible.builtin.uri:
+        url: "http://localhost:9090/api/v1/status/config"
+        method: GET
+        status_code: 200
+      register: prometheus_check
+      retries: 3
+      delay: 10
+      until: prometheus_check.status == 200
 
-          scrape_configs:
-            - job_name: 'prometheus'
-              static_configs:
-                - targets: ['localhost:9090']
+    - name: Verify Grafana is accessible
+      ansible.builtin.uri:
+        url: "http://localhost:3000/api/health"
+        method: GET
+        status_code: 200
+      register: grafana_check
+      retries: 3
+      delay: 10
+      until: grafana_check.status == 200
 
-            - job_name: 'node'
-              static_configs:
-                - targets: >-
-                    {{
-                      groups['staging']
-                      | map('extract', hostvars, 'ansible_host')
-                      | map('regex_replace', '^(.*)$', '\1:9100')
-                      | list
-                    }}
+    - name: Verify Loki is accessible
+      ansible.builtin.uri:
+        url: "http://localhost:3100/ready"
+        method: GET
+        status_code: 200
+      register: loki_check
+      retries: 3
+      delay: 10
+      until: loki_check.status == 200
 
-            - job_name: 'grafana'
-              static_configs:
-                - targets: ['localhost:3000']
-        dest: /etc/prometheus/prometheus.yml
-        mode: '0644'
-      when: inventory_hostname == "vm-a"
-
-    - name: Deploy Loki configuration
-      ansible.builtin.copy:
-        content: |
-          auth_enabled: false
-
-          server:
-            http_listen_port: 3100
-            grpc_listen_port: 9096
-
-          common:
-            path_prefix: /loki
-            storage:
-              filesystem:
-                chunks_directory: /loki/chunks
-                rules_directory: /loki/rules
-            replication_factor: 1
-            ring:
-              kvstore:
-                store: inmemory
-
-          schema_config:
-            configs:
-              - from: 2020-10-24
-                store: boltdb-shipper
-                object_store: filesystem
-                schema: v11
-                index:
-                  prefix: index_
-                  period: 24h
-
-          limits_config:
-            enforce_metric_name: false
-            reject_old_samples: true
-            reject_old_samples_max_age: 168h
-        dest: /etc/loki/loki-config.yaml
-        mode: '0644'
-      when: inventory_hostname == "vm-a"
-
-    - name: Deploy Promtail configuration
-      ansible.builtin.copy:
-        content: |
-          server:
-            http_listen_port: 9080
-            grpc_listen_port: 0
-
-          positions:
-            filename: /tmp/positions.yaml
-
-          clients:
-            - url: http://{{ hostvars[groups['observability'][0]]["ansible_host"] }}:3100/loki/api/v1/push
-
-          scrape_configs:
-            - job_name: journal
-              journal:
-                json: false
-                max_age: 12h
-                labels:
-                  job: systemd-journal
-                  host: "{{ inventory_hostname }}"
-              relabel_configs:
-                - source_labels: ['__journal__systemd_unit']
-                  target_label: 'unit'
-        dest: /etc/promtail/promtail-config.yaml
-        mode: '0644'
-
-    - name: Deploy Caddy configuration
-      ansible.builtin.copy:
-        content: |
-          :80 {
-              respond "Homelab Ingress"
-          }
-
-          :3000 {
-              reverse_proxy localhost:3000
-          }
-
-          :9090 {
-              reverse_proxy localhost:9090
-          }
-        dest: /etc/caddy/Caddyfile
-        mode: '0644'
-      when: inventory_hostname == "vm-b"
-
-    - name: Copy Quadlet service definitions
-      ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: /etc/containers/systemd/
-        mode: '0644'
-      loop:
-        - "{{ playbook_dir }}/../../quadlet/prometheus.container"
-        - "{{ playbook_dir }}/../../quadlet/grafana.container"
-        - "{{ playbook_dir }}/../../quadlet/loki.container"
-        - "{{ playbook_dir }}/../../quadlet/promtail.container"
-        - "{{ playbook_dir }}/../../quadlet/node-exporter.container"
-        - "{{ playbook_dir }}/../../quadlet/caddy.container"
-
-    - name: Create Podman volumes
-      containers.podman.podman_volume:
-        name: "{{ item }}"
-        state: present
-      loop:
-        - prometheus-data
-        - grafana-data
-        - loki-data
-        - caddy-data
-        - caddy-config
-
-    - name: Reload systemd daemon
-      ansible.builtin.systemd:
-        daemon_reload: yes
-
-    - name: Start node-exporter on all hosts
-      ansible.builtin.systemd:
-        name: node-exporter.service
-        state: started
-        enabled: yes
-
-    - name: Start Prometheus on vm-a
-      ansible.builtin.systemd:
-        name: prometheus.service
-        state: started
-        enabled: yes
-      when: inventory_hostname == "vm-a"
-
-    - name: Start Grafana on vm-a
-      ansible.builtin.systemd:
-        name: grafana.service
-        state: started
-        enabled: yes
-      when: inventory_hostname == "vm-a"
-
-    - name: Start Loki on vm-a
-      ansible.builtin.systemd:
-        name: loki.service
-        state: started
-        enabled: yes
-      when: inventory_hostname == "vm-a"
-
-    - name: Start Promtail on all hosts
-      ansible.builtin.systemd:
-        name: promtail.service
-        state: started
-        enabled: yes
-
-    - name: Start Caddy on vm-b
-      ansible.builtin.systemd:
-        name: caddy.service
-        state: started
-        enabled: yes
-      when: inventory_hostname == "vm-b"
+    - name: Configure Prometheus data sources in Grafana
+      ansible.builtin.uri:
+        url: "http://localhost:3000/api/datasources"
+        method: POST
+        user: "{{ grafana_security.admin_user }}"
+        password: "{{ grafana_security.admin_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          name: "Prometheus"
+          type: "prometheus"
+          url: "http://localhost:9090"
+          access: "proxy"
+          isDefault: true
+        status_code: [200, 409]  # 409 if already exists
+      register: grafana_ds_result
+      failed_when: 
+        - grafana_ds_result.status not in [200, 409]
+        - '"already exists" not in (grafana_ds_result.json.message | default(""))'
 
   post_tasks:
-    - name: Wait for services to be healthy
+    - name: Wait for all monitoring services to be healthy
       ansible.builtin.wait_for:
-        port: "{{ item.port }}"
-        host: "{{ item.host | default('localhost') }}"
+        port: "{{ item }}"
+        host: "{{ ansible_host }}"
         timeout: 60
         state: started
       loop:
-        - { port: 9100, host: "{{ ansible_host }}" }  # node-exporter
-        - { port: 9090, host: "{{ hostvars['vm-a']['ansible_host'] }}" }  # prometheus
-        - { port: 3000, host: "{{ hostvars['vm-a']['ansible_host'] }}" }  # grafana
-        - { port: 3100, host: "{{ hostvars['vm-a']['ansible_host'] }}" }  # loki
-      when: item.host is defined
+        - 9090  # Prometheus
+        - 3000  # Grafana
+        - 3100  # Loki
 
-    - name: Display service URLs
+    - name: Display monitoring service information
       ansible.builtin.debug:
         msg: |
-          Services deployed successfully!
+          Monitoring stack deployed successfully on {{ inventory_hostname }}!
 
-          Prometheus: http://{{ hostvars['vm-a']['ansible_host'] }}:9090
-          Grafana: http://{{ hostvars['vm-a']['ansible_host'] }}:3000 (admin/admin)
-          Loki: http://{{ hostvars['vm-a']['ansible_host'] }}:3100
+          Services:
+          - Prometheus: http://{{ ansible_host }}:9090
+          - Grafana: http://{{ ansible_host }}:3000 (admin/admin)
+          - Loki: http://{{ ansible_host }}:3100
 
-          Node Exporters:
-            - http://{{ hostvars['vm-a']['ansible_host'] }}:9100/metrics
-            - http://{{ hostvars['vm-b']['ansible_host'] }}:9100/metrics
-            - http://{{ hostvars['vm-c']['ansible_host'] }}:9100/metrics
+          Deployment Details:
+          - Prometheus: Native systemd service with {{ prometheus_retention_time }} retention
+          - Grafana: Native systemd service with provisioned datasources
+          - Loki: Podman container with {{ loki_retention_period }} retention
+          
+          Node Exporters deployed on all Pi nodes:
+          {% for host in groups['pis'] -%}
+          - http://{{ hostvars[host]['ansible_host'] }}:9100/metrics
+          {% endfor %}
       run_once: true

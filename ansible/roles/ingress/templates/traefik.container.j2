@@ -1,0 +1,52 @@
+[Unit]
+Description=Traefik Reverse Proxy
+Documentation=https://doc.traefik.io/traefik/
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ traefik_image }}
+AutoUpdate=registry
+
+# Network and Ports  
+Network=host
+PublishPort={{ traefik_http_port }}:{{ traefik_http_port }}
+PublishPort={{ traefik_https_port }}:{{ traefik_https_port }}
+PublishPort={{ traefik_api_port }}:{{ traefik_api_port }}
+PublishPort={{ traefik_metrics_port }}:{{ traefik_metrics_port }}
+
+# Volumes and Configuration
+Volume={{ traefik_config_dir }}:/etc/traefik:ro
+Volume={{ traefik_data_dir }}:/data:Z
+Volume={{ traefik_log_dir }}:/var/log/traefik:Z
+Volume={{ traefik_certs_dir }}:/certs:ro
+
+# Environment Variables
+Environment=CLOUDFLARE_EMAIL={{ cloudflare_email }}
+Environment=CLOUDFLARE_DNS_API_TOKEN={{ cloudflare_api_token }}
+
+# Runtime Configuration
+User=root
+Group=root
+
+# Command Arguments
+Exec=--configfile=/etc/traefik/traefik.yml
+
+# Podman specific
+PodmanArgs=--log-driver=journald
+PodmanArgs=--sdnotify=container
+
+# Health Check
+HealthCmd=wget --no-verbose --tries=1 --spider http://localhost:{{ traefik_api_port }}/ping || exit 1
+HealthInterval=10s  
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=30s
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

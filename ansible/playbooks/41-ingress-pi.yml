@@ -1,0 +1,199 @@
+---
+# Ingress deployment playbook for Pi cluster
+- name: Deploy Traefik ingress controller
+  hosts: ingress_nodes
+  gather_facts: yes
+  become: yes
+  serial: "{{ serial | default(1) }}"
+
+  pre_tasks:
+    - name: Check Podman deployment
+      ansible.builtin.stat:
+        path: /etc/ansible/facts.d/podman.fact
+      register: podman_check
+
+    - name: Fail if Podman not deployed
+      ansible.builtin.fail:
+        msg: "Podman not deployed. Run 20-podman.yml first."
+      when: not podman_check.stat.exists
+
+    - name: Verify time synchronization (CLAUDE.md compliance)
+      ansible.builtin.shell: |
+        chronyc tracking | grep -E "Reference time|Stratum|System time" || exit 1
+        # Check drift and stratum requirements
+        chronyc tracking | awk '/System time/ {if ($4 > 0.1) exit 1}'
+        chronyc tracking | awk '/Stratum/ {if ($3 > 3) exit 1}'
+      changed_when: false
+      failed_when: false
+      register: time_check
+    
+    - name: Fail if time synchronization requirements not met
+      ansible.builtin.fail:
+        msg: "Time synchronization requirements not met. Drift must be ≤100ms, stratum ≤3."
+      when: time_check.rc != 0
+
+    - name: Check SSH redundancy (OpenSSH + Tailscale)
+      block:
+        - name: Verify OpenSSH is running
+          ansible.builtin.systemd:
+            name: ssh
+            state: started
+          check_mode: yes
+          register: openssh_check
+        
+        - name: Verify Tailscale is accessible (if enabled)
+          ansible.builtin.command:
+            cmd: tailscale status
+          register: tailscale_check
+          changed_when: false
+          failed_when: false
+          when: base_tailscale_enabled | default(true)
+
+    - name: Check monitoring connectivity
+      ansible.builtin.uri:
+        url: "http://{{ hostvars[groups['monitoring_nodes'][0]]['ansible_host'] }}:9090/api/v1/status/config"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: monitoring_check
+      retries: 2
+      delay: 5
+      failed_when: false
+
+    - name: Warning if monitoring not accessible
+      ansible.builtin.debug:
+        msg: "WARNING: Monitoring stack not accessible. Deploy monitoring first for proper integration."
+      when: monitoring_check.status != 200
+
+  roles:
+    - ingress
+
+  tasks:
+    - name: Verify Traefik dashboard is accessible
+      ansible.builtin.uri:
+        url: "http://localhost:8080/dashboard/"
+        method: GET
+        status_code: 200
+      register: dashboard_check
+      retries: 3
+      delay: 10
+      until: dashboard_check.status == 200
+
+    - name: Verify Traefik API is responding
+      ansible.builtin.uri:
+        url: "http://localhost:8080/api/version"
+        method: GET
+        status_code: 200
+      register: api_check
+      retries: 3
+      delay: 5
+      until: api_check.status == 200
+
+    - name: Test service routing
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}"
+        method: GET
+        status_code: [200, 404]  # 404 is acceptable if no default route
+        timeout: 10
+      register: routing_check
+      failed_when: false
+
+  post_tasks:
+    - name: Wait for ingress services to be healthy
+      ansible.builtin.wait_for:
+        port: "{{ item }}"
+        host: "{{ ansible_host }}"
+        timeout: 60
+        state: started
+      loop:
+        - 80   # HTTP
+        - 443  # HTTPS (if TLS enabled)
+        - 8080 # Dashboard
+        - 8082 # Metrics
+
+    - name: Display ingress service information
+      ansible.builtin.debug:
+        msg: |
+          Traefik ingress controller deployed successfully on {{ inventory_hostname }}!
+
+          Services:
+          - Dashboard: http://{{ ansible_host }}:8080/dashboard/
+          - API: http://{{ ansible_host }}:8080/api/version
+          - Metrics: http://{{ ansible_host }}:8082/metrics
+          - HTTP Entry Point: http://{{ ansible_host }}
+          - HTTPS Entry Point: https://{{ ansible_host }} (if TLS configured)
+
+          Configured Routes:
+          {% for service_name, config in traefik_services.items() -%}
+          - {{ service_name }}: {{ config.rule }} -> {{ config.url }}
+          {% endfor %}
+
+          SSL Configuration:
+          - Provider: {{ 'Let\'s Encrypt' if traefik_tls_enabled else 'Disabled' }}
+          - Domain: {{ ingress_main_domain }}
+          - Wildcard: {{ ingress_subdomain_wildcard }}
+
+          Health Checks:
+          - Dashboard: {{ 'OK' if dashboard_check.status == 200 else 'FAILED' }}
+          - API: {{ 'OK' if api_check.status == 200 else 'FAILED' }}
+          - Routing: {{ 'OK' if routing_check.status in [200, 404] else 'FAILED' }}
+
+    - name: Create service validation script
+      ansible.builtin.template:
+        src: validate-ingress.sh.j2
+        dest: /usr/local/bin/validate-ingress.sh
+        mode: '0755'
+      vars:
+        script_content: |
+          #!/bin/bash
+          # Ingress validation script - {{ ansible_managed }}
+          
+          echo "=== Traefik Ingress Health Check ==="
+          
+          # Check Traefik API
+          echo -n "Traefik API: "
+          if curl -s http://localhost:8080/api/version > /dev/null; then
+              echo "OK"
+          else
+              echo "FAILED"
+              exit 1
+          fi
+          
+          # Check dashboard
+          echo -n "Dashboard: "
+          if curl -s http://localhost:8080/dashboard/ > /dev/null; then
+              echo "OK"
+          else
+              echo "FAILED"
+              exit 1
+          fi
+          
+          # Check metrics
+          echo -n "Metrics: "
+          if curl -s http://localhost:8082/metrics > /dev/null; then
+              echo "OK"
+          else
+              echo "FAILED"
+              exit 1
+          fi
+          
+          # Check backend services
+          echo -n "Monitoring backend: "
+          if curl -s http://{{ hostvars[groups['monitoring_nodes'][0]]['ansible_host'] }}:9090/api/v1/status/config > /dev/null; then
+              echo "OK"
+          else
+              echo "WARNING - Backend not accessible"
+          fi
+          
+          echo "=== All checks completed ==="
+      become: yes
+
+    - name: Run ingress validation
+      ansible.builtin.command:
+        cmd: /usr/local/bin/validate-ingress.sh
+      register: validation_result
+      changed_when: false
+
+    - name: Display validation results
+      ansible.builtin.debug:
+        var: validation_result.stdout_lines

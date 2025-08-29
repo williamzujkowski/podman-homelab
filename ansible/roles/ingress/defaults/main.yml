@@ -1,0 +1,96 @@
+---
+# Ingress role defaults
+
+# Traefik container configuration
+traefik_image: docker.io/traefik:v3.1
+traefik_config_dir: /etc/traefik
+traefik_data_dir: /var/lib/traefik
+traefik_log_dir: /var/log/traefik
+traefik_dynamic_config_dir: /etc/traefik/dynamic
+traefik_certs_dir: /etc/traefik/certs
+
+# Domain configuration
+ingress_domain: grenlan.com
+ingress_subdomain_wildcard: "*.homelab.{{ ingress_domain }}"
+ingress_main_domain: "homelab.{{ ingress_domain }}"
+
+# Let's Encrypt configuration via certbot
+letsencrypt_email: admin@{{ ingress_domain }}
+letsencrypt_staging: false
+certbot_config_dir: /etc/letsencrypt
+certbot_webroot_path: /var/www/certbot
+
+# Cloudflare API configuration (for DNS challenge)
+cloudflare_email: ""  # Set in group_vars/secrets
+cloudflare_api_token: ""  # Set in group_vars/secrets
+
+# Traefik dashboard configuration
+traefik_dashboard_enabled: true
+traefik_dashboard_insecure: true  # For internal access
+traefik_api_port: 8080
+traefik_metrics_port: 8082
+
+# Network ports
+traefik_http_port: 80
+traefik_https_port: 443
+
+# Service routes configuration
+traefik_services:
+  prometheus:
+    rule: "Host(`prometheus.homelab.{{ ingress_domain }}`)"
+    service: "prometheus-service"
+    url: "http://{{ hostvars[groups['monitoring_nodes'][0]]['ansible_host'] }}:9090"
+    
+  grafana:
+    rule: "Host(`grafana.homelab.{{ ingress_domain }}`)"
+    service: "grafana-service"
+    url: "http://{{ hostvars[groups['monitoring_nodes'][0]]['ansible_host'] }}:3000"
+    
+  loki:
+    rule: "Host(`loki.homelab.{{ ingress_domain }}`)"
+    service: "loki-service"
+    url: "http://{{ hostvars[groups['monitoring_nodes'][0]]['ansible_host'] }}:3100"
+
+# SSL/TLS configuration
+traefik_tls_enabled: true
+traefik_tls_min_version: "VersionTLS12"
+traefik_tls_ciphers:
+  - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+  - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+  - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+
+# Security headers
+traefik_security_headers:
+  accessControlAllowMethods:
+    - GET
+    - OPTIONS
+    - PUT
+    - POST
+    - DELETE
+  accessControlAllowOriginList:
+    - "https://{{ ingress_main_domain }}"
+    - "https://{{ ingress_subdomain_wildcard }}"
+  accessControlMaxAge: 100
+  addVaryHeader: true
+  browserXssFilter: true
+  contentTypeNosniff: true
+  forceSTSHeader: true
+  frameDeny: true
+  stsIncludeSubdomains: true
+  stsPreload: true
+  stsSeconds: 31536000
+
+# Firewall ports to open
+ingress_firewall_ports:
+  - port: "{{ traefik_http_port }}"
+    proto: tcp
+    comment: "Traefik HTTP"
+  - port: "{{ traefik_https_port }}"
+    proto: tcp
+    comment: "Traefik HTTPS"
+  - port: "{{ traefik_api_port }}"
+    proto: tcp
+    comment: "Traefik Dashboard"
+  - port: "{{ traefik_metrics_port }}"
+    proto: tcp
+    comment: "Traefik Metrics"

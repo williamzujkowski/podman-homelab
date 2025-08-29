@@ -1,0 +1,25 @@
+---
+# Handlers for monitoring role
+
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: restart prometheus
+  ansible.builtin.systemd:
+    name: prometheus
+    state: restarted
+  become: yes
+
+- name: restart grafana
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: restarted
+  become: yes
+
+- name: restart loki
+  ansible.builtin.systemd:
+    name: loki.service
+    state: restarted
+  become: yes

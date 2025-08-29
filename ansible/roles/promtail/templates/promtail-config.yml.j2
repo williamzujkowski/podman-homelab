@@ -1,0 +1,74 @@
+server:
+  http_listen_port: {{ promtail_listen_port }}
+  grpc_listen_port: 0
+
+positions:
+  filename: {{ promtail_positions_file }}
+
+clients:
+  - url: {{ loki_url }}
+
+scrape_configs:
+{% for config in promtail_scrape_configs %}
+  - job_name: {{ config.job_name }}
+{% if config.journal is defined %}
+    journal:
+{% for key, value in config.journal.items() %}
+      {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% if config.static_configs is defined %}
+    static_configs:
+{% for static_config in config.static_configs %}
+      - targets:
+{% for target in static_config.targets %}
+          - {{ target }}
+{% endfor %}
+        labels:
+{% for key, value in static_config.labels.items() %}
+          {{ key }}: "{{ value }}"
+{% endfor %}
+{% endfor %}
+{% endif %}
+{% if config.relabel_configs is defined %}
+    relabel_configs:
+{% for relabel in config.relabel_configs %}
+      - source_labels:
+{% for label in relabel.source_labels %}
+          - {{ label }}
+{% endfor %}
+        target_label: {{ relabel.target_label }}
+{% if relabel.regex is defined %}
+        regex: {{ relabel.regex }}
+{% endif %}
+{% if relabel.replacement is defined %}
+        replacement: {{ relabel.replacement }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+
+# Additional scrape configs for custom log paths
+{% if additional_log_paths %}
+{% for log_path in additional_log_paths %}
+  - job_name: {{ log_path.name }}
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: {{ log_path.job }}
+          host: "{{ inventory_hostname }}"
+          __path__: {{ log_path.path }}
+{% if log_path.pipeline_stages is defined %}
+    pipeline_stages:
+{% for stage in log_path.pipeline_stages %}
+      - {{ stage.type }}:
+{% for key, value in stage.config.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endif %}

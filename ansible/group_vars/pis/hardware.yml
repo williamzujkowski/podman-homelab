@@ -1,0 +1,44 @@
+---
+# Raspberry Pi specific hardware configuration
+
+# Architecture settings
+ansible_architecture: aarch64
+container_platform: linux/arm64
+
+# Hardware limits and tuning
+pi_hardware:
+  memory_split_gpu: 64  # MB for GPU
+  gpu_memory: 64
+  cpu_governor: performance
+  enable_i2c: false
+  enable_spi: false
+  enable_camera: false
+  
+  # Temperature thresholds
+  temp_warning: 70      # Celsius
+  temp_critical: 80     # Celsius
+  
+  # Power management
+  hdmi_blanking: true
+  usb_power_management: true
+
+# SD Card optimization
+sd_card_tuning:
+  noatime: true
+  commit_interval: 600
+  vm_dirty_ratio: 5
+  vm_dirty_background_ratio: 2
+
+# Network interface naming
+network_interface_names:
+  ethernet: eth0
+  wireless: wlan0
+
+# Package repositories for ARM64
+package_repos:
+  - name: ubuntu-ports
+    url: http://ports.ubuntu.com/ubuntu-ports
+    components: [main, restricted, universe, multiverse]
+  - name: docker-arm64
+    url: https://download.docker.com/linux/ubuntu
+    arch: arm64

@@ -1,0 +1,107 @@
+---
+# Main tasks for node-exporter role
+
+- name: Create node_exporter user and group
+  block:
+    - name: Create node_exporter group
+      ansible.builtin.group:
+        name: "{{ node_exporter_group }}"
+        system: yes
+      become: yes
+
+    - name: Create node_exporter user
+      ansible.builtin.user:
+        name: "{{ node_exporter_user }}"
+        group: "{{ node_exporter_group }}"
+        system: yes
+        shell: /bin/false
+        home: /var/lib/node_exporter
+        create_home: no
+      become: yes
+
+- name: Create node_exporter directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    mode: '0755'
+  loop:
+    - "{{ node_exporter_config_dir }}"
+    - "{{ node_exporter_log_dir }}"
+    - "{{ node_exporter_textfile_deploy_dir }}"
+  become: yes
+
+- name: Open firewall ports for node exporter
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ node_exporter_firewall_ports }}"
+  become: yes
+  when: base_firewall_enabled | default(true)
+
+- name: Download and install Node Exporter
+  block:
+    - name: Download Node Exporter
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-arm64.tar.gz"
+        dest: "/tmp/node_exporter-{{ node_exporter_version }}.linux-arm64.tar.gz"
+        mode: '0644'
+      become: yes
+
+    - name: Extract Node Exporter
+      ansible.builtin.unarchive:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-arm64.tar.gz"
+        dest: /tmp
+        remote_src: yes
+      become: yes
+
+    - name: Install Node Exporter binary
+      ansible.builtin.copy:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-arm64/node_exporter"
+        dest: "{{ node_exporter_binary_dir }}/node_exporter"
+        mode: '0755'
+        owner: root
+        group: root
+        remote_src: yes
+      become: yes
+      notify: restart node_exporter
+
+    - name: Clean up downloaded files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/node_exporter-{{ node_exporter_version }}.linux-arm64.tar.gz"
+        - "/tmp/node_exporter-{{ node_exporter_version }}.linux-arm64"
+      become: yes
+
+- name: Deploy Node Exporter systemd service
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart node_exporter
+
+- name: Deploy custom textfile collector scripts
+  ansible.builtin.include_tasks: textfile_collectors.yml
+
+- name: Enable and start Node Exporter service
+  ansible.builtin.systemd:
+    name: node_exporter
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+
+- name: Wait for Node Exporter to be ready
+  ansible.builtin.wait_for:
+    port: 9100
+    host: "{{ ansible_host }}"
+    timeout: 30
+    state: started

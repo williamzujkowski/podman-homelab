@@ -1,0 +1,75 @@
+---
+# Ingress nodes specific configuration
+
+# Traefik configuration
+ingress_services:
+  traefik:
+    enabled: true
+    deployment_type: container
+    replicas: 1
+    resources:
+      memory_limit: 512M
+      cpu_limit: 0.5
+
+# SSL/TLS configuration
+ssl_configuration:
+  provider: letsencrypt
+  staging: false
+  dns_provider: cloudflare
+  cert_renewal_schedule: "0 3 * * *"
+  
+# Domain routing
+domain_routes:
+  - domain: "homelab.{{ domain }}"
+    target: dashboard
+    port: 80
+    
+  - domain: "prometheus.homelab.{{ domain }}"
+    target: "{{ hostvars[groups['monitoring_nodes'][0]]['ansible_host'] }}"
+    port: 9090
+    
+  - domain: "grafana.homelab.{{ domain }}"
+    target: "{{ hostvars[groups['monitoring_nodes'][0]]['ansible_host'] }}"
+    port: 3000
+    
+  - domain: "loki.homelab.{{ domain }}"
+    target: "{{ hostvars[groups['monitoring_nodes'][0]]['ansible_host'] }}"
+    port: 3100
+
+# Security middleware
+security_middleware:
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 300
+    
+  ip_whitelist:
+    enabled: false
+    allowed_ips: []
+    
+  basic_auth:
+    enabled: false
+    users: {}
+
+# Load balancing
+load_balancing:
+  algorithm: round_robin
+  health_check:
+    enabled: true
+    interval: 30s
+    timeout: 5s
+    
+# Access logs
+access_logs:
+  enabled: true
+  format: json
+  fields:
+    - StartUTC
+    - Duration
+    - RouterName
+    - ServiceName
+    - ServiceURL
+    - RequestHost
+    - RequestMethod
+    - RequestPath
+    - RequestProtocol
+    - ResponseCode

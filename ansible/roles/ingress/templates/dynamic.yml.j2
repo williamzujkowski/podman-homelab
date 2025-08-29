@@ -1,0 +1,65 @@
+http:
+  routers:
+{% for service_name, config in traefik_services.items() %}
+    {{ service_name }}-router:
+      rule: "{{ config.rule }}"
+      service: "{{ config.service }}"
+{% if traefik_tls_enabled %}
+      tls:
+        certResolver: letsencrypt
+{% endif %}
+      middlewares:
+        - security-headers
+{% if config.middlewares is defined %}
+{% for middleware in config.middlewares %}
+        - {{ middleware }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+
+  services:
+{% for service_name, config in traefik_services.items() %}
+    {{ config.service }}:
+      loadBalancer:
+        servers:
+          - url: "{{ config.url }}"
+{% if config.healthCheck is defined %}
+        healthCheck:
+          path: "{{ config.healthCheck.path | default('/') }}"
+          interval: "{{ config.healthCheck.interval | default('30s') }}"
+{% endif %}
+
+{% endfor %}
+
+  middlewares:
+    security-headers:
+      headers:
+{% for header, value in traefik_security_headers.items() %}
+{% if value is string %}
+        {{ header }}: "{{ value }}"
+{% elif value is number %}
+        {{ header }}: {{ value }}
+{% elif value is boolean %}
+        {{ header }}: {{ value | lower }}
+{% elif value is iterable %}
+        {{ header }}:
+{% for item in value %}
+          - "{{ item }}"
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+{% if traefik_tls_enabled %}
+tls:
+  certificates:
+    - certFile: {{ traefik_certs_dir }}/{{ ingress_main_domain }}.crt
+      keyFile: {{ traefik_certs_dir }}/{{ ingress_main_domain }}.key
+      stores:
+        - default
+  stores:
+    default:
+      defaultCertificate:
+        certFile: {{ traefik_certs_dir }}/{{ ingress_main_domain }}.crt
+        keyFile: {{ traefik_certs_dir }}/{{ ingress_main_domain }}.key
+{% endif %}

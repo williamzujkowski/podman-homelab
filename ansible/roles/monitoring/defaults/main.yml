@@ -1,0 +1,116 @@
+---
+# Monitoring role defaults
+
+# Component deployment types
+monitoring_prometheus_deployment_type: native  # native or container
+monitoring_grafana_deployment_type: native     # native or container  
+monitoring_loki_deployment_type: container     # native or container
+monitoring_promtail_deployment_type: container # native or container
+
+# Prometheus configuration
+prometheus_version: 2.47.0
+prometheus_user: prometheus
+prometheus_group: prometheus
+prometheus_config_dir: /etc/prometheus
+prometheus_data_dir: /var/lib/prometheus
+prometheus_log_dir: /var/log/prometheus
+prometheus_binary_dir: /usr/local/bin
+prometheus_web_listen_address: "0.0.0.0:9090"
+prometheus_retention_time: "30d"
+prometheus_retention_size: "10GB"
+
+# Grafana configuration
+grafana_version: "10.2.0"
+grafana_user: grafana
+grafana_group: grafana
+grafana_config_dir: /etc/grafana
+grafana_data_dir: /var/lib/grafana
+grafana_log_dir: /var/log/grafana
+grafana_plugins_dir: /var/lib/grafana/plugins
+grafana_provisioning_dir: /etc/grafana/provisioning
+grafana_dashboards_dir: /var/lib/grafana/dashboards
+
+grafana_server:
+  http_port: 3000
+  domain: "{{ inventory_hostname }}"
+  root_url: "http://%(domain)s:%(http_port)s/"
+
+grafana_security:
+  admin_user: admin
+  admin_password: admin
+  secret_key: "{{ grafana_secret_key | default('SW2YcwTIb9zpOOhoPsMm') }}"
+
+grafana_database:
+  type: sqlite3
+  path: grafana.db
+
+grafana_auth:
+  disable_login_form: false
+  disable_signout_menu: false
+
+# Loki configuration (container)
+loki_image: docker.io/grafana/loki:2.9.0
+loki_config_dir: /etc/loki
+loki_data_dir: /var/lib/loki
+loki_listen_port: 3100
+loki_retention_period: "168h"  # 7 days
+
+# Scrape targets for Prometheus
+prometheus_scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - "{{ inventory_hostname }}:9090"
+
+  - job_name: node_exporter
+    static_configs:
+      - targets: "{{ groups['pis'] | map('extract', hostvars, 'ansible_host') | map('regex_replace', '^(.*)$', '\\1:9100') | list }}"
+
+  - job_name: grafana
+    static_configs:
+      - targets:
+          - "{{ inventory_hostname }}:3000"
+    
+  - job_name: loki
+    static_configs:
+      - targets:
+          - "{{ inventory_hostname }}:3100"
+
+  - job_name: traefik
+    static_configs:
+      - targets:
+          - "{{ hostvars[groups['ingress_nodes'][0]]['ansible_host'] }}:8082"
+    metrics_path: /metrics
+
+# Grafana datasources
+grafana_datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: "http://localhost:9090"
+    basicAuth: false
+    isDefault: true
+    
+  - name: Loki
+    type: loki
+    access: proxy
+    url: "http://localhost:3100"
+    basicAuth: false
+
+# Grafana dashboard provisioning
+grafana_dashboards:
+  - name: node-exporter
+    folder: "System"
+    path: "{{ role_path }}/files/dashboards/node-exporter.json"
+
+# Firewall ports to open
+monitoring_firewall_ports:
+  - port: 9090
+    proto: tcp
+    comment: "Prometheus"
+  - port: 3000
+    proto: tcp
+    comment: "Grafana"
+  - port: 3100
+    proto: tcp
+    comment: "Loki"

@@ -1,0 +1,74 @@
+api:
+  dashboard: {{ traefik_dashboard_enabled | lower }}
+  debug: true
+  insecure: {{ traefik_dashboard_insecure | lower }}
+
+entryPoints:
+  web:
+    address: ":{{ traefik_http_port }}"
+{% if traefik_tls_enabled %}
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+{% endif %}
+  
+{% if traefik_tls_enabled %}
+  websecure:
+    address: ":{{ traefik_https_port }}"
+    http:
+      tls:
+        options: default
+{% endif %}
+  
+  metrics:
+    address: ":{{ traefik_metrics_port }}"
+
+providers:
+  file:
+    directory: "{{ traefik_dynamic_config_dir }}"
+    watch: true
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: true
+
+log:
+  level: INFO
+  filePath: {{ traefik_log_dir }}/traefik.log
+
+accessLog:
+  filePath: {{ traefik_log_dir }}/access.log
+
+ping:
+  entryPoint: web
+
+{% if traefik_tls_enabled %}
+tls:
+  options:
+    default:
+      minVersion: "{{ traefik_tls_min_version }}"
+      cipherSuites:
+{% for cipher in traefik_tls_ciphers %}
+        - "{{ cipher }}"
+{% endfor %}
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: {{ letsencrypt_email }}
+      storage: {{ traefik_data_dir }}/acme.json
+{% if letsencrypt_staging %}
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+{% endif %}
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+{% endif %}

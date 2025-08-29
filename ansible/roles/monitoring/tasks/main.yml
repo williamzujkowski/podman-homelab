@@ -1,0 +1,35 @@
+---
+# Main tasks for monitoring role
+
+- name: Install common monitoring dependencies
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - unzip
+      - tar
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Open firewall ports for monitoring services
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ monitoring_firewall_ports }}"
+  become: yes
+  when: base_firewall_enabled | default(true)
+
+- name: Deploy Prometheus (native)
+  ansible.builtin.include_tasks: prometheus_native.yml
+  when: monitoring_prometheus_deployment_type == "native"
+
+- name: Deploy Grafana (native)
+  ansible.builtin.include_tasks: grafana_native.yml
+  when: monitoring_grafana_deployment_type == "native"
+
+- name: Deploy Loki (container)
+  ansible.builtin.include_tasks: loki_container.yml
+  when: monitoring_loki_deployment_type == "container"

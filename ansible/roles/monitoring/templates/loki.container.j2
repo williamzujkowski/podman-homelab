@@ -1,0 +1,40 @@
+[Unit]
+Description=Loki Log Aggregation Server
+Documentation=https://grafana.com/docs/loki/
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ loki_image }}
+AutoUpdate=registry
+
+# Network and Ports
+Network=host
+PublishPort={{ loki_listen_port }}:{{ loki_listen_port }}
+
+# Volumes and Configuration
+Volume={{ loki_config_dir }}/loki-config.yml:/etc/loki/local-config.yaml:ro
+Volume=loki-data:{{ loki_data_dir }}:Z
+
+# Runtime Configuration
+User=root
+Group=root
+
+# Podman specific
+PodmanArgs=--log-driver=journald
+PodmanArgs=--sdnotify=container
+
+# Health Check
+HealthCmd=wget --no-verbose --tries=1 --spider http://localhost:{{ loki_listen_port }}/ready || exit 1
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=30s
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

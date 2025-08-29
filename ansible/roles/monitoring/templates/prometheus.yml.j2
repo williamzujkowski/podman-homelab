@@ -1,0 +1,37 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'pi-cluster'
+    region: 'homelab'
+
+rule_files:
+  - "{{ prometheus_config_dir }}/rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+scrape_configs:
+{% for config in prometheus_scrape_configs %}
+  - job_name: "{{ config.job_name }}"
+    static_configs:
+      - targets:
+{% for target in config.static_configs[0].targets %}
+        - "{{ target }}"
+{% endfor %}
+{% if config.metrics_path is defined %}
+    metrics_path: "{{ config.metrics_path }}"
+{% endif %}
+{% if config.scrape_interval is defined %}
+    scrape_interval: "{{ config.scrape_interval }}"
+{% endif %}
+{% if config.params is defined %}
+    params:
+{% for key, value in config.params.items() %}
+      {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}

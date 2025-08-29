@@ -1,0 +1,54 @@
+---
+# Promtail role defaults
+
+# Promtail container configuration
+promtail_image: docker.io/grafana/promtail:2.9.0
+promtail_config_dir: /etc/promtail
+promtail_data_dir: /var/lib/promtail
+promtail_positions_file: /var/lib/promtail/positions.yaml
+promtail_listen_port: 9080
+
+# Loki server configuration
+loki_url: "http://{{ hostvars[groups['monitoring_nodes'][0]]['ansible_host'] }}:3100/loki/api/v1/push"
+
+# Log collection configuration
+promtail_scrape_configs:
+  - job_name: journal
+    journal:
+      json: false
+      max_age: 12h
+      labels:
+        job: systemd-journal
+        host: "{{ inventory_hostname }}"
+    relabel_configs:
+      - source_labels: ['__journal__systemd_unit']
+        target_label: 'unit'
+      - source_labels: ['__journal_priority_keyword']
+        target_label: 'level'
+
+  - job_name: syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          host: "{{ inventory_hostname }}"
+          __path__: /var/log/syslog
+
+  - job_name: auth_log
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: auth
+          host: "{{ inventory_hostname }}"
+          __path__: /var/log/auth.log
+
+# Additional log paths for monitoring
+additional_log_paths: []
+
+# Firewall configuration
+promtail_firewall_ports:
+  - port: 9080
+    proto: tcp
+    comment: "Promtail"

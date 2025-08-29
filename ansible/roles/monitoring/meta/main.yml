@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  author: homelab
+  description: Monitoring stack role for Pi cluster
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - focal
+
+dependencies:
+  - role: podman
+    when: monitoring_loki_deployment_type == "container"

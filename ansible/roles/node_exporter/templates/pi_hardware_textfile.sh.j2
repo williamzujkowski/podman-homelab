@@ -1,0 +1,67 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Raspberry Pi hardware textfile collector for Node Exporter
+
+# CPU temperature (if available)
+if [ -f /sys/class/thermal/thermal_zone0/temp ]; then
+    temp=$(cat /sys/class/thermal/thermal_zone0/temp)
+    temp_c=$(echo "$temp / 1000" | bc -l)
+    echo "node_pi_cpu_temperature_celsius $temp_c"
+fi
+
+# GPU temperature (if vcgencmd is available)
+if command -v vcgencmd >/dev/null 2>&1; then
+    gpu_temp=$(vcgencmd measure_temp | grep -o '[0-9.]*')
+    if [ -n "$gpu_temp" ]; then
+        echo "node_pi_gpu_temperature_celsius $gpu_temp"
+    fi
+fi
+
+# CPU frequency (if available)
+if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq ]; then
+    freq_hz=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq)
+    freq_mhz=$(echo "$freq_hz / 1000" | bc -l)
+    echo "node_pi_cpu_frequency_mhz $freq_mhz"
+fi
+
+# Memory split (if vcgencmd is available)
+if command -v vcgencmd >/dev/null 2>&1; then
+    gpu_mem=$(vcgencmd get_mem gpu | grep -o '[0-9]*')
+    arm_mem=$(vcgencmd get_mem arm | grep -o '[0-9]*')
+    if [ -n "$gpu_mem" ]; then
+        echo "node_pi_gpu_memory_mb $gpu_mem"
+    fi
+    if [ -n "$arm_mem" ]; then
+        echo "node_pi_arm_memory_mb $arm_mem"
+    fi
+fi
+
+# Throttling status
+if command -v vcgencmd >/dev/null 2>&1; then
+    throttled=$(vcgencmd get_throttled | grep -o 'throttled=0x[0-9A-F]*' | cut -d= -f2)
+    if [ -n "$throttled" ]; then
+        throttled_decimal=$((16#${throttled#0x}))
+        echo "node_pi_throttled_status $throttled_decimal"
+        
+        # Individual throttling flags
+        echo "node_pi_under_voltage_detected $((throttled_decimal & 1))"
+        echo "node_pi_arm_frequency_capped $((throttled_decimal >> 1 & 1))"
+        echo "node_pi_currently_throttled $((throttled_decimal >> 2 & 1))"
+        echo "node_pi_soft_temperature_limit $((throttled_decimal >> 3 & 1))"
+        echo "node_pi_under_voltage_occurred $((throttled_decimal >> 16 & 1))"
+        echo "node_pi_arm_frequency_capping_occurred $((throttled_decimal >> 17 & 1))"
+        echo "node_pi_throttling_occurred $((throttled_decimal >> 18 & 1))"
+        echo "node_pi_soft_temperature_limit_occurred $((throttled_decimal >> 19 & 1))"
+    fi
+fi
+
+# SD card health (basic check)
+if [ -b /dev/mmcblk0 ]; then
+    echo "node_pi_sdcard_present 1"
+else
+    echo "node_pi_sdcard_present 0"
+fi
+
+# Boot count from uptime
+boot_time=$(awk '{print int($1)}' /proc/uptime)
+echo "node_pi_uptime_seconds $boot_time"

@@ -66,6 +66,11 @@ base_packages:
   - fail2ban
   - unattended-upgrades
   - apt-listchanges
+  - bc
+  - lsof
+  - tree
+  - rsync
+  - cron
 
 # Firewall configuration
 base_firewall_enabled: true

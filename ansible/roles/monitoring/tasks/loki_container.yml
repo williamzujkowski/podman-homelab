@@ -1,0 +1,51 @@
+---
+# Deploy Loki as Podman container
+
+- name: Create Loki directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ loki_config_dir }}"
+    - "{{ loki_data_dir }}"
+  become: yes
+
+- name: Deploy Loki configuration
+  ansible.builtin.template:
+    src: loki-config.yml.j2
+    dest: "{{ loki_config_dir }}/loki-config.yml"
+    mode: '0644'
+  become: yes
+  notify: restart loki
+
+- name: Create Loki Quadlet definition
+  ansible.builtin.template:
+    src: loki.container.j2
+    dest: /etc/containers/systemd/loki.container
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart loki
+
+- name: Create Loki data volume
+  containers.podman.podman_volume:
+    name: loki-data
+    state: present
+  become: yes
+
+- name: Enable and start Loki container service
+  ansible.builtin.systemd:
+    name: loki.service
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+
+- name: Wait for Loki to be ready
+  ansible.builtin.wait_for:
+    port: "{{ loki_listen_port }}"
+    host: "{{ ansible_host }}"
+    timeout: 60
+    state: started

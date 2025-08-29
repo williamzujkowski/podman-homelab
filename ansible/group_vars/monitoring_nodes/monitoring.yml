@@ -1,0 +1,70 @@
+---
+# Monitoring nodes specific configuration
+
+# Service placement
+monitoring_services:
+  prometheus:
+    enabled: true
+    deployment_type: native
+    replicas: 1
+    resources:
+      memory_limit: 2G
+      cpu_limit: 1.0
+  
+  grafana:
+    enabled: true
+    deployment_type: native
+    replicas: 1
+    resources:
+      memory_limit: 1G
+      cpu_limit: 0.5
+  
+  loki:
+    enabled: true
+    deployment_type: container
+    replicas: 1
+    resources:
+      memory_limit: 1G
+      cpu_limit: 0.5
+
+# Monitoring configuration overrides
+prometheus_retention_time: 60d
+prometheus_retention_size: 50GB
+prometheus_external_labels:
+  cluster: pi-homelab
+  region: homelab
+  environment: production
+
+# Grafana customization
+grafana_install_plugins:
+  - grafana-piechart-panel
+  - grafana-worldmap-panel
+  - redis-datasource
+
+grafana_smtp:
+  enabled: false
+  host: localhost:587
+  user: ""
+  password: ""
+  from_address: "grafana@{{ domain }}"
+
+# Alert manager (if enabled later)
+alertmanager_enabled: false
+alertmanager_config_dir: /etc/alertmanager
+alertmanager_data_dir: /var/lib/alertmanager
+
+# Custom dashboards
+custom_dashboards:
+  - name: pi-cluster-overview
+    url: https://raw.githubusercontent.com/rfrail3/grafana-dashboards/master/prometheus/raspberry-pi.json
+  - name: traefik-dashboard
+    url: https://grafana.com/api/dashboards/4475/revisions/5/download
+
+# Data source health checks
+datasource_health_checks:
+  prometheus:
+    url: http://localhost:9090/api/v1/status/config
+    timeout: 10
+  loki:
+    url: http://localhost:3100/ready
+    timeout: 10

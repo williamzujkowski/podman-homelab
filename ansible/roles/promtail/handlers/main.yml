@@ -1,0 +1,13 @@
+---
+# Handlers for promtail role
+
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: restart promtail
+  ansible.builtin.systemd:
+    name: promtail.service
+    state: restarted
+  become: yes

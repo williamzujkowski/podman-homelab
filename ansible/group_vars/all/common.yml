@@ -1,0 +1,60 @@
+---
+# Common variables for all hosts
+
+# Environment configuration
+deployment_environment: production
+cluster_name: pi-homelab
+
+# Domain configuration
+domain: grenlan.com
+internal_domain: local
+search_domains:
+  - "{{ domain }}"
+  - "{{ internal_domain }}"
+
+# Network configuration
+internal_network: 192.168.1.0/24
+cluster_cidr: 10.244.0.0/16
+
+# Time synchronization (CLAUDE.md compliance)
+ntp_servers:
+  - server: time.cloudflare.com
+    options: "iburst nts"
+  - server: time.nist.gov
+    options: "iburst"
+  - server: ntp-a.nist.gov
+    options: "iburst"
+  - server: ntp-b.nist.gov
+    options: "iburst"
+
+ntp_max_drift_ms: 100
+ntp_max_stratum: 3
+
+# SSH configuration (dual SSH compliance)
+ssh_ports:
+  - port: 22
+    service: openssh
+  # Tailscale SSH uses port 22 but different config
+
+# Container configuration
+container_runtime: podman
+container_arch: arm64
+podman_storage_driver: overlay
+enable_rootless: true
+use_digest_pinning: true
+
+# Security settings
+enable_firewall: true
+enable_fail2ban: true
+enable_auto_updates: false  # Manual updates only in production
+enable_monitoring: true
+enable_alerting: true
+
+# Log retention
+log_retention_days: 30
+metrics_retention_days: 30
+
+# Backup configuration
+backup_enabled: true
+backup_retention_days: 7
+backup_schedule: "0 2 * * *"

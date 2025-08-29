@@ -1,0 +1,35 @@
+[Unit]
+Description=Node Exporter
+Documentation=https://prometheus.io/docs/guides/node-exporter/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ node_exporter_user }}
+Group={{ node_exporter_group }}
+ExecStart={{ node_exporter_binary_dir }}/node_exporter \
+  --web.listen-address={{ node_exporter_web_listen_address }} \
+{% for collector in node_exporter_enabled_collectors %}
+{% if collector is string %}
+  --collector.{{ collector }} \
+{% else %}
+{% for name, config in collector.items() %}
+  --collector.{{ name }} \
+{% for key, value in config.items() %}
+  --collector.{{ name }}.{{ key.replace('_', '-') }}="{{ value }}" \
+{% endfor %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% for collector in node_exporter_disabled_collectors %}
+  --no-collector.{{ collector }} \
+{% endfor %}
+  --log.level=info
+
+SyslogIdentifier=node_exporter
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

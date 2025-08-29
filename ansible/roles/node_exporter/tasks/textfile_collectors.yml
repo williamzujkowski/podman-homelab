@@ -1,0 +1,43 @@
+---
+# Deploy custom textfile collector scripts
+
+- name: Deploy apt updates textfile collector
+  ansible.builtin.template:
+    src: apt_updates_textfile.sh.j2
+    dest: "{{ node_exporter_config_dir }}/apt_updates_textfile.sh"
+    mode: '0755'
+    owner: root
+    group: root
+  become: yes
+
+- name: Deploy Pi-specific hardware textfile collector
+  ansible.builtin.template:
+    src: pi_hardware_textfile.sh.j2
+    dest: "{{ node_exporter_config_dir }}/pi_hardware_textfile.sh"
+    mode: '0755'
+    owner: root
+    group: root
+  become: yes
+
+- name: Create cron job for apt updates textfile collector
+  ansible.builtin.cron:
+    name: "Node Exporter APT updates collector"
+    minute: "*/15"
+    job: "{{ node_exporter_config_dir }}/apt_updates_textfile.sh > {{ node_exporter_textfile_deploy_dir }}/apt_updates.prom"
+    user: root
+  become: yes
+
+- name: Create cron job for Pi hardware textfile collector
+  ansible.builtin.cron:
+    name: "Node Exporter Pi hardware collector"
+    minute: "*/5"
+    job: "{{ node_exporter_config_dir }}/pi_hardware_textfile.sh > {{ node_exporter_textfile_deploy_dir }}/pi_hardware.prom"
+    user: root
+  become: yes
+
+- name: Run textfile collectors immediately
+  ansible.builtin.shell: |
+    {{ node_exporter_config_dir }}/apt_updates_textfile.sh > {{ node_exporter_textfile_deploy_dir }}/apt_updates.prom
+    {{ node_exporter_config_dir }}/pi_hardware_textfile.sh > {{ node_exporter_textfile_deploy_dir }}/pi_hardware.prom
+  become: yes
+  changed_when: false

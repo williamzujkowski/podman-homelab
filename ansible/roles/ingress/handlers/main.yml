@@ -1,0 +1,13 @@
+---
+# Handlers for ingress role
+
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: restart traefik
+  ansible.builtin.systemd:
+    name: traefik.service
+    state: restarted
+  become: yes

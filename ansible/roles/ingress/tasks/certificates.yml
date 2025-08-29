@@ -1,0 +1,107 @@
+---
+# SSL certificate management tasks
+
+- name: Create Cloudflare credentials file for certbot
+  ansible.builtin.template:
+    src: cloudflare.ini.j2
+    dest: "{{ certbot_config_dir }}/cloudflare.ini"
+    mode: '0600'
+  become: yes
+  when: cloudflare_api_token != ""
+
+- name: Check if SSL certificates exist
+  ansible.builtin.stat:
+    path: "{{ certbot_config_dir }}/live/{{ ingress_main_domain }}/fullchain.pem"
+  register: ssl_cert_exists
+  become: yes
+
+- name: Generate Let's Encrypt SSL certificates (staging)
+  ansible.builtin.command:
+    cmd: >
+      certbot certonly
+      --dns-cloudflare
+      --dns-cloudflare-credentials {{ certbot_config_dir }}/cloudflare.ini
+      --email {{ letsencrypt_email }}
+      --server https://acme-staging-v02.api.letsencrypt.org/directory
+      --agree-tos
+      --non-interactive
+      -d {{ ingress_main_domain }}
+      -d {{ ingress_subdomain_wildcard }}
+  become: yes
+  when: 
+    - not ssl_cert_exists.stat.exists
+    - letsencrypt_staging | bool
+    - cloudflare_api_token != ""
+  register: certbot_staging_result
+
+- name: Generate Let's Encrypt SSL certificates (production)
+  ansible.builtin.command:
+    cmd: >
+      certbot certonly
+      --dns-cloudflare
+      --dns-cloudflare-credentials {{ certbot_config_dir }}/cloudflare.ini
+      --email {{ letsencrypt_email }}
+      --agree-tos
+      --non-interactive
+      -d {{ ingress_main_domain }}
+      -d {{ ingress_subdomain_wildcard }}
+  become: yes
+  when: 
+    - not ssl_cert_exists.stat.exists
+    - not letsencrypt_staging | bool
+    - cloudflare_api_token != ""
+  register: certbot_prod_result
+
+- name: Copy SSL certificates to Traefik directory
+  ansible.builtin.copy:
+    src: "{{ certbot_config_dir }}/live/{{ ingress_main_domain }}/{{ item.src }}"
+    dest: "{{ traefik_certs_dir }}/{{ item.dest }}"
+    mode: '0644'
+    remote_src: yes
+  loop:
+    - { src: "fullchain.pem", dest: "{{ ingress_main_domain }}.crt" }
+    - { src: "privkey.pem", dest: "{{ ingress_main_domain }}.key" }
+  become: yes
+  when: ssl_cert_exists.stat.exists or certbot_staging_result.changed or certbot_prod_result.changed
+  notify: restart traefik
+
+- name: Setup certificate renewal cron job
+  ansible.builtin.cron:
+    name: "Renew Let's Encrypt certificates"
+    minute: "0"
+    hour: "12"
+    job: "/usr/bin/certbot renew --quiet && systemctl restart traefik"
+    user: root
+  become: yes
+  when: cloudflare_api_token != ""
+
+- name: Create self-signed certificates for development (fallback)
+  block:
+    - name: Generate private key
+      community.crypto.openssl_privatekey:
+        path: "{{ traefik_certs_dir }}/{{ ingress_main_domain }}.key"
+        size: 2048
+      become: yes
+
+    - name: Generate certificate signing request
+      community.crypto.openssl_csr:
+        path: "{{ traefik_certs_dir }}/{{ ingress_main_domain }}.csr"
+        privatekey_path: "{{ traefik_certs_dir }}/{{ ingress_main_domain }}.key"
+        common_name: "{{ ingress_main_domain }}"
+        subject_alt_name:
+          - "DNS:{{ ingress_main_domain }}"
+          - "DNS:*.homelab.{{ ingress_domain }}"
+      become: yes
+
+    - name: Generate self-signed certificate
+      community.crypto.x509_certificate:
+        path: "{{ traefik_certs_dir }}/{{ ingress_main_domain }}.crt"
+        privatekey_path: "{{ traefik_certs_dir }}/{{ ingress_main_domain }}.key"
+        csr_path: "{{ traefik_certs_dir }}/{{ ingress_main_domain }}.csr"
+        provider: selfsigned
+        valid_in: 3650
+      become: yes
+      notify: restart traefik
+  when: 
+    - cloudflare_api_token == ""
+    - not ssl_cert_exists.stat.exists

@@ -1,0 +1,39 @@
+[server]
+http_port = {{ grafana_server.http_port }}
+domain = {{ grafana_server.domain }}
+root_url = {{ grafana_server.root_url }}
+
+[database]
+type = {{ grafana_database.type }}
+path = {{ grafana_database.path }}
+
+[security]
+admin_user = {{ grafana_security.admin_user }}
+admin_password = {{ grafana_security.admin_password }}
+secret_key = {{ grafana_security.secret_key }}
+
+[auth]
+disable_login_form = {{ grafana_auth.disable_login_form | lower }}
+disable_signout_menu = {{ grafana_auth.disable_signout_menu | lower }}
+
+[paths]
+data = {{ grafana_data_dir }}
+logs = {{ grafana_log_dir }}
+plugins = {{ grafana_plugins_dir }}
+provisioning = {{ grafana_provisioning_dir }}
+
+[log]
+mode = file
+level = info
+
+[analytics]
+reporting_enabled = false
+check_for_updates = true
+
+[metrics]
+enabled = true
+basic_auth_username =
+basic_auth_password =
+
+[grafana_net]
+url = https://grafana.net

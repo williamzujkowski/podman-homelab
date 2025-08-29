@@ -1,0 +1,45 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Traefik Ingress validation script
+
+echo "=== Traefik Ingress Health Check ==="
+
+# Check Traefik API
+echo -n "Traefik API: "
+if curl -s http://localhost:{{ traefik_api_port }}/api/version > /dev/null; then
+    echo "OK"
+else
+    echo "FAILED"
+    exit 1
+fi
+
+# Check dashboard
+echo -n "Dashboard: "
+if curl -s http://localhost:{{ traefik_api_port }}/dashboard/ > /dev/null; then
+    echo "OK"
+else
+    echo "FAILED"
+    exit 1
+fi
+
+# Check metrics
+echo -n "Metrics: "
+if curl -s http://localhost:{{ traefik_metrics_port }}/metrics > /dev/null; then
+    echo "OK"
+else
+    echo "FAILED"
+    exit 1
+fi
+
+# Check backend services
+{% for service_name, config in traefik_services.items() %}
+echo -n "{{ service_name }} backend: "
+backend_url="{{ config.url | regex_replace('http://([^:]+):(.+)', '\\1:\\2') }}"
+if curl -s -m 5 "{{ config.url }}" > /dev/null 2>&1; then
+    echo "OK"
+else
+    echo "WARNING - {{ service_name }} backend not accessible"
+fi
+{% endfor %}
+
+echo "=== All checks completed ==="

@@ -1,0 +1,87 @@
+---
+# Main tasks for ingress role
+
+- name: Install ingress dependencies
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - certbot
+      - python3-certbot-dns-cloudflare
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Open firewall ports for ingress services
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ ingress_firewall_ports }}"
+  become: yes
+  when: base_firewall_enabled | default(true)
+
+- name: Create ingress directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ traefik_config_dir }}"
+    - "{{ traefik_dynamic_config_dir }}"
+    - "{{ traefik_data_dir }}"
+    - "{{ traefik_log_dir }}"
+    - "{{ traefik_certs_dir }}"
+    - "{{ certbot_webroot_path }}"
+  become: yes
+
+- name: Setup SSL certificates
+  ansible.builtin.include_tasks: certificates.yml
+
+- name: Deploy Traefik static configuration
+  ansible.builtin.template:
+    src: traefik.yml.j2
+    dest: "{{ traefik_config_dir }}/traefik.yml"
+    mode: '0644'
+  become: yes
+  notify: restart traefik
+
+- name: Deploy Traefik dynamic configuration
+  ansible.builtin.template:
+    src: dynamic.yml.j2
+    dest: "{{ traefik_dynamic_config_dir }}/dynamic.yml"
+    mode: '0644'
+  become: yes
+  notify: restart traefik
+
+- name: Deploy Traefik Quadlet definition
+  ansible.builtin.template:
+    src: traefik.container.j2
+    dest: /etc/containers/systemd/traefik.container
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart traefik
+
+- name: Create Traefik data volume
+  containers.podman.podman_volume:
+    name: traefik-data
+    state: present
+  become: yes
+
+- name: Enable and start Traefik service
+  ansible.builtin.systemd:
+    name: traefik.service
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+
+- name: Wait for Traefik to be ready
+  ansible.builtin.wait_for:
+    port: "{{ traefik_http_port }}"
+    host: "{{ ansible_host }}"
+    timeout: 60
+    state: started

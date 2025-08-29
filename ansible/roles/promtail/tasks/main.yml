@@ -1,0 +1,61 @@
+---
+# Main tasks for promtail role
+
+- name: Create promtail directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ promtail_config_dir }}"
+    - "{{ promtail_data_dir }}"
+  become: yes
+
+- name: Open firewall ports for promtail
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ promtail_firewall_ports }}"
+  become: yes
+  when: base_firewall_enabled | default(true)
+
+- name: Deploy Promtail configuration
+  ansible.builtin.template:
+    src: promtail-config.yml.j2
+    dest: "{{ promtail_config_dir }}/promtail-config.yml"
+    mode: '0644'
+  become: yes
+  notify: restart promtail
+
+- name: Create Promtail Quadlet definition
+  ansible.builtin.template:
+    src: promtail.container.j2
+    dest: /etc/containers/systemd/promtail.container
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart promtail
+
+- name: Create Promtail data volume
+  containers.podman.podman_volume:
+    name: promtail-data
+    state: present
+  become: yes
+
+- name: Enable and start Promtail service
+  ansible.builtin.systemd:
+    name: promtail.service
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+
+- name: Wait for Promtail to be ready
+  ansible.builtin.wait_for:
+    port: "{{ promtail_listen_port }}"
+    host: "{{ ansible_host }}"
+    timeout: 30
+    state: started

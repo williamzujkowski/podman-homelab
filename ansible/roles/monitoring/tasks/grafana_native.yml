@@ -1,0 +1,117 @@
+---
+# Deploy Grafana as native systemd service
+
+- name: Create grafana user and group
+  block:
+    - name: Create grafana group
+      ansible.builtin.group:
+        name: "{{ grafana_group }}"
+        system: yes
+      become: yes
+
+    - name: Create grafana user
+      ansible.builtin.user:
+        name: "{{ grafana_user }}"
+        group: "{{ grafana_group }}"
+        system: yes
+        shell: /bin/false
+        home: "{{ grafana_data_dir }}"
+        create_home: no
+      become: yes
+
+- name: Create Grafana directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0755'
+  loop:
+    - "{{ grafana_config_dir }}"
+    - "{{ grafana_data_dir }}"
+    - "{{ grafana_log_dir }}"
+    - "{{ grafana_plugins_dir }}"
+    - "{{ grafana_provisioning_dir }}"
+    - "{{ grafana_provisioning_dir }}/datasources"
+    - "{{ grafana_provisioning_dir }}/dashboards"
+    - "{{ grafana_dashboards_dir }}"
+  become: yes
+
+- name: Install Grafana via APT repository
+  block:
+    - name: Add Grafana GPG key
+      ansible.builtin.get_url:
+        url: https://apt.grafana.com/gpg.key
+        dest: /etc/apt/keyrings/grafana.asc
+        mode: '0644'
+      become: yes
+
+    - name: Add Grafana repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+        filename: grafana
+        state: present
+      become: yes
+
+    - name: Install Grafana
+      ansible.builtin.apt:
+        name: grafana
+        state: present
+        update_cache: yes
+      become: yes
+
+- name: Deploy Grafana configuration
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: "{{ grafana_config_dir }}/grafana.ini"
+    owner: root
+    group: "{{ grafana_group }}"
+    mode: '0640'
+  become: yes
+  notify: restart grafana
+
+- name: Deploy Grafana datasources configuration
+  ansible.builtin.template:
+    src: datasources.yml.j2
+    dest: "{{ grafana_provisioning_dir }}/datasources/datasources.yml"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0644'
+  become: yes
+  notify: restart grafana
+
+- name: Deploy Grafana dashboards provisioning configuration
+  ansible.builtin.template:
+    src: dashboards.yml.j2
+    dest: "{{ grafana_provisioning_dir }}/dashboards/dashboards.yml"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0644'
+  become: yes
+  notify: restart grafana
+
+- name: Copy dashboard files
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ grafana_dashboards_dir }}/{{ item.name }}.json"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0644'
+  loop: "{{ grafana_dashboards }}"
+  become: yes
+  when: grafana_dashboards is defined
+
+- name: Enable and start Grafana service
+  ansible.builtin.systemd:
+    name: grafana-server
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+
+- name: Wait for Grafana to be ready
+  ansible.builtin.wait_for:
+    port: 3000
+    host: "{{ ansible_host }}"
+    timeout: 60
+    state: started
