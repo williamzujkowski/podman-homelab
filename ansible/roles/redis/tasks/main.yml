@@ -1,6 +1,6 @@
 ---
 - name: Create redis directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: root
@@ -11,7 +11,7 @@
     - "{{ redis_data_path }}"
 
 - name: Create Redis configuration
-  template:
+  ansible.builtin.template:
     src: redis.conf.j2
     dest: "{{ redis_config_path }}/redis.conf"
     owner: root
@@ -20,7 +20,7 @@
   notify: restart redis
 
 - name: Create systemd directory for containers
-  file:
+  ansible.builtin.file:
     path: /etc/containers/systemd
     state: directory
     owner: root
@@ -28,7 +28,7 @@
     mode: '0755'
 
 - name: Deploy Redis quadlet
-  template:
+  ansible.builtin.template:
     src: redis.container.j2
     dest: /etc/containers/systemd/redis.container
     owner: root
@@ -37,17 +37,17 @@
   notify: restart redis
 
 - name: Reload systemd daemon
-  systemd:
+  ansible.builtin.systemd:
     daemon_reload: yes
 
 - name: Start and enable Redis
-  systemd:
+  ansible.builtin.systemd:
     name: redis.service
     state: started
     enabled: yes
 
 - name: Wait for Redis to be ready
-  wait_for:
+  ansible.builtin.wait_for:
     port: "{{ redis_port }}"
     host: localhost
     delay: 5

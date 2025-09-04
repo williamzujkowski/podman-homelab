@@ -2,25 +2,25 @@
 - name: restart authentik
   block:
     - name: restart authentik-server
-      systemd:
+      ansible.builtin.systemd:
         name: authentik-server.service
         state: restarted
         daemon_reload: yes
-    
+
     - name: restart authentik-worker
-      systemd:
+      ansible.builtin.systemd:
         name: authentik-worker.service
         state: restarted
         daemon_reload: yes
 
 - name: restart authentik-server
-  systemd:
+  ansible.builtin.systemd:
     name: authentik-server.service
     state: restarted
     daemon_reload: yes
 
 - name: restart authentik-worker
-  systemd:
+  ansible.builtin.systemd:
     name: authentik-worker.service
     state: restarted
     daemon_reload: yes

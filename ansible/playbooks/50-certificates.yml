@@ -40,20 +40,21 @@
 
   post_tasks:
     - name: Verify CA service is running
-      systemd:
+      ansible.builtin.systemd:
         name: step-ca
         state: started
       when: inventory_hostname == ca_host
 
     - name: Test certificate generation
-      uri:
+      ansible.builtin.uri:
         url: "https://{{ ansible_default_ipv4.address }}"
         validate_certs: true
       ignore_errors: true
       register: cert_test
 
     - name: Display certificate status
-      debug:
+      ansible.builtin.debug:
         msg: >-
           Certificate test for {{ inventory_hostname }}:
           {{ 'SUCCESS' if cert_test.status is defined else 'PENDING' }}
+

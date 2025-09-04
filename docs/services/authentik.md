@@ -227,6 +227,73 @@ sudo podman exec authentik-server /lifecycle/ak migrate
 - Use PostgreSQL connection pooling
 - Enable GeoIP for location tracking
 
+## Emergency Access Procedures
+
+### Critical: Fallback Access Methods
+
+To prevent complete lockout, multiple access methods are maintained:
+
+1. **Direct SSH** (Always Independent of Authentik)
+   - Port 22: Standard SSH with key auth
+   - Port 2222: Emergency SSH backup
+   - User: `pi` (standard) or `pi-emergency` (backup)
+   
+2. **Direct Service Access** (Bypasses Traefik/Authentik)
+   ```bash
+   # Critical services remain accessible
+   http://192.168.1.12:9090  # Prometheus
+   http://192.168.1.12:3000  # Grafana
+   http://192.168.1.13:9000  # Authentik admin
+   ```
+
+3. **Emergency Bypass Scripts** (on pi-b)
+   ```bash
+   # Disable all Authentik authentication
+   sudo /usr/local/bin/emergency-access
+   
+   # Restore normal authentication
+   sudo /usr/local/bin/restore-auth
+   ```
+
+### Recovery Procedure
+
+1. **Access via SSH** (never depends on Authentik)
+   ```bash
+   ssh pi@192.168.1.13  # Direct to pi-d where Authentik runs
+   ```
+
+2. **Check Service Status**
+   ```bash
+   sudo systemctl status authentik-server authentik-worker
+   sudo podman ps -a | grep authentik
+   ```
+
+3. **Review Logs**
+   ```bash
+   sudo podman logs authentik-server --tail 50
+   sudo podman logs authentik-worker --tail 50
+   ```
+
+4. **Restart if Needed**
+   ```bash
+   sudo systemctl restart authentik-server authentik-worker
+   ```
+
+5. **If Authentik Cannot be Fixed**
+   - SSH to pi-b: `ssh pi@192.168.1.11`
+   - Run: `sudo /usr/local/bin/emergency-access`
+   - This disables ForwardAuth globally
+   - Fix Authentik
+   - Run: `sudo /usr/local/bin/restore-auth`
+
+### Important Safety Rules
+
+1. **Never** require Authentik for SSH access
+2. **Always** maintain direct port access to critical services
+3. **Test** emergency procedures quarterly
+4. **Document** all emergency access usage
+5. **Keep** emergency credentials in secure vault
+
 ## References
 
 - [Official Documentation](https://goauthentik.io/docs/)

@@ -1,0 +1,246 @@
+---
+- name: Configure Emergency Access and Fallback Mechanisms
+  hosts: all_pis
+  become: yes
+  vars:
+    emergency_ssh_port: 2222  # Backup SSH port
+    emergency_user: "pi-emergency"
+    emergency_web_port: 8443  # Direct access to services
+    
+  tasks:
+    - name: Ensure SSH remains independent of Authentik
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?Port "
+        line: "Port 22"
+        state: present
+        backup: yes
+      notify: restart sshd
+    
+    - name: Create emergency SSH configuration on alternate port
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config.d/99-emergency.conf
+        create: yes
+        block: |
+          # Emergency SSH Access - Never modify both SSH configs in same change
+          Port {{ emergency_ssh_port }}
+          PasswordAuthentication no
+          PubkeyAuthentication yes
+          PermitRootLogin no
+          AllowUsers pi {{ emergency_user }}
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - Emergency SSH"
+      notify: restart sshd
+    
+    - name: Create emergency user for backup access
+      ansible.builtin.user:
+        name: "{{ emergency_user }}"
+        groups: sudo
+        shell: /bin/bash
+        password: "{{ vault_emergency_password | password_hash('sha512') }}"
+        update_password: on_create
+        comment: "Emergency Access User - Use only when primary auth fails"
+    
+    - name: Add SSH key for emergency user
+      ansible.posix.authorized_key:
+        user: "{{ emergency_user }}"
+        state: present
+        key: "{{ vault_emergency_ssh_pubkey }}"
+        exclusive: no
+      when: vault_emergency_ssh_pubkey is defined
+    
+    - name: Create Traefik bypass configuration
+      ansible.builtin.copy:
+        content: |
+          # Emergency Access Bypass - Activate by renaming to .yml
+          # RENAME TO authentik-bypass.yml TO DISABLE AUTHENTIK AUTH
+          http:
+            middlewares:
+              # Override the authentik-auth middleware with a no-op
+              authentik-auth:
+                headers:
+                  customRequestHeaders:
+                    X-Bypass-Active: "true"
+        dest: /etc/traefik/dynamic/authentik-bypass.yml.disabled
+        owner: root
+        group: root
+        mode: '0644'
+      when: inventory_hostname == 'pi-b'
+    
+    - name: Create direct access configuration for critical services
+      ansible.builtin.copy:
+        content: |
+          # Direct Access Routes - Always Available
+          # These bypass Authentik for emergency access
+          http:
+            routers:
+              prometheus-direct:
+                rule: "Host(`{{ ansible_hostname }}.local`) && PathPrefix(`/prometheus`)"
+                service: prometheus-direct
+                priority: 200
+              
+              grafana-direct:
+                rule: "Host(`{{ ansible_hostname }}.local`) && PathPrefix(`/grafana`)" 
+                service: grafana-direct
+                priority: 200
+            
+            services:
+              prometheus-direct:
+                loadBalancer:
+                  servers:
+                    - url: "http://192.168.1.12:9090"
+              
+              grafana-direct:
+                loadBalancer:
+                  servers:
+                    - url: "http://192.168.1.12:3000"
+        dest: /etc/traefik/dynamic/emergency-direct.yml
+        owner: root
+        group: root
+        mode: '0644'
+      when: inventory_hostname == 'pi-b'
+    
+    - name: Create emergency access script
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          # Emergency Access Activation Script
+          # Use when Authentik is failing
+          
+          set -e
+          
+          echo "🚨 ACTIVATING EMERGENCY ACCESS MODE"
+          echo "This will disable Authentik authentication temporarily"
+          
+          # Backup current state
+          cp /etc/traefik/dynamic/authentik.yml /etc/traefik/dynamic/authentik.yml.backup
+          
+          # Activate bypass
+          mv /etc/traefik/dynamic/authentik-bypass.yml.disabled /etc/traefik/dynamic/authentik-bypass.yml
+          
+          # Restart Traefik
+          systemctl restart traefik
+          
+          echo "✅ Emergency access activated"
+          echo "⚠️  Remember to restore normal operation with: /usr/local/bin/restore-auth"
+        dest: /usr/local/bin/emergency-access
+        owner: root
+        group: root
+        mode: '0755'
+      when: inventory_hostname == 'pi-b'
+    
+    - name: Create auth restoration script
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          # Restore Normal Authentication
+          
+          set -e
+          
+          echo "🔒 RESTORING NORMAL AUTHENTICATION"
+          
+          # Deactivate bypass
+          if [ -f /etc/traefik/dynamic/authentik-bypass.yml ]; then
+            mv /etc/traefik/dynamic/authentik-bypass.yml /etc/traefik/dynamic/authentik-bypass.yml.disabled
+          fi
+          
+          # Restore original if backed up
+          if [ -f /etc/traefik/dynamic/authentik.yml.backup ]; then
+            mv /etc/traefik/dynamic/authentik.yml.backup /etc/traefik/dynamic/authentik.yml
+          fi
+          
+          # Restart Traefik
+          systemctl restart traefik
+          
+          echo "✅ Normal authentication restored"
+        dest: /usr/local/bin/restore-auth
+        owner: root
+        group: root
+        mode: '0755'
+      when: inventory_hostname == 'pi-b'
+    
+    - name: Document emergency procedures
+      ansible.builtin.copy:
+        content: |
+          # EMERGENCY ACCESS PROCEDURES
+          # ============================
+          
+          ## When to Use
+          - Authentik is down or misconfigured
+          - OAuth2/OIDC is failing
+          - Locked out of admin accounts
+          - Network authentication issues
+          
+          ## Access Methods (in order of preference)
+          
+          ### 1. Direct SSH (Always Available)
+          ```bash
+          # Primary SSH (port 22)
+          ssh pi@192.168.1.12  # pi-a
+          ssh pi@192.168.1.11  # pi-b
+          ssh pi@192.168.1.10  # pi-c
+          ssh pi@192.168.1.13  # pi-d
+          
+          # Emergency SSH (port {{ emergency_ssh_port }})
+          ssh -p {{ emergency_ssh_port }} {{ emergency_user }}@192.168.1.12
+          ```
+          
+          ### 2. Direct Service Access (No Auth)
+          ```bash
+          # Prometheus
+          http://192.168.1.12:9090
+          
+          # Grafana  
+          http://192.168.1.12:3000
+          
+          # Via hostname (if Traefik emergency routes active)
+          http://pi-a.local/prometheus
+          http://pi-a.local/grafana
+          ```
+          
+          ### 3. Disable Authentik Auth (on pi-b)
+          ```bash
+          sudo /usr/local/bin/emergency-access
+          # This disables ForwardAuth globally
+          ```
+          
+          ### 4. Restore Normal Auth (after fixing)
+          ```bash
+          sudo /usr/local/bin/restore-auth
+          ```
+          
+          ## Recovery Steps
+          
+          1. SSH to affected Pi using direct SSH
+          2. Check container status:
+             ```bash
+             sudo podman ps -a
+             sudo systemctl status authentik-server
+             ```
+          3. Review logs:
+             ```bash
+             sudo podman logs authentik-server
+             sudo journalctl -u authentik-server -n 100
+             ```
+          4. If needed, restart services:
+             ```bash
+             sudo systemctl restart authentik-server authentik-worker
+             ```
+          5. If Authentik is broken, activate emergency access on pi-b
+          6. Fix the issue
+          7. Restore normal authentication
+          
+          ## Important Notes
+          - NEVER modify both SSH ports in the same change
+          - Keep emergency user credentials in secure vault
+          - Test emergency access quarterly
+          - Document all emergency access usage
+        dest: /etc/emergency-access-procedures.md
+        owner: root
+        group: root
+        mode: '0644'
+    
+  handlers:
+    - name: restart sshd
+      ansible.builtin.systemd:
+        name: sshd
+        state: restarted

@@ -10,13 +10,13 @@
     authentik_external_url: "https://auth.homelab.grenlan.com"
     authentik_bootstrap_password: "{{ vault_authentik_admin_password | default('ChangeMe123!') }}"
     authentik_bootstrap_email: "admin@homelab.grenlan.com"
-    
+
   pre_tasks:
     - name: Ensure Podman is installed
-      package:
+      ansible.builtin.package:
         name: podman
         state: present
-    
+
     - name: Create authentik network
       containers.podman.podman_network:
         name: authentik
@@ -29,7 +29,7 @@
 
   post_tasks:
     - name: Display access information
-      debug:
+      ansible.builtin.debug:
         msg:
           - "Authentik has been deployed!"
           - "Access at: {{ authentik_external_url }}"
@@ -39,9 +39,9 @@
           - "Health check: sudo /usr/local/bin/check-authentik-health"
           - ""
           - "IMPORTANT: Change the default password after first login!"
-    
+
     - name: Create firewall rules for Authentik
-      ufw:
+      community.general.ufw:
         rule: allow
         port: "{{ item }}"
         proto: tcp

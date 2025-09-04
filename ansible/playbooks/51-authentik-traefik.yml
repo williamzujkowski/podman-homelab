@@ -4,10 +4,10 @@
   become: yes
   vars:
     authentik_url: "http://192.168.1.13:9000"  # pi-d where Authentik runs
-    
+
   tasks:
     - name: Create Traefik dynamic configuration for Authentik
-      copy:
+      ansible.builtin.copy:
         content: |
           http:
             routers:
@@ -19,7 +19,7 @@
                 middlewares:
                   - default-headers
                   - https-redirect
-              
+
               # Outpost router for forward auth
               authentik-outpost:
                 rule: "Host(`auth.homelab.grenlan.com`) && PathPrefix(`/outpost.goauthentik.io/`)"
@@ -27,7 +27,7 @@
                 tls:
                   certResolver: letsencrypt
                 priority: 100
-            
+
             services:
               authentik:
                 loadBalancer:
@@ -37,7 +37,7 @@
                     path: /api/v3/root/config/
                     interval: 30s
                     timeout: 3s
-            
+
             middlewares:
               # ForwardAuth middleware for protected services
               authentik-auth:
@@ -56,7 +56,7 @@
                     - X-authentik-meta-provider
                     - X-authentik-meta-app
                     - X-authentik-meta-version
-              
+
               default-headers:
                 headers:
                   stsSeconds: 31536000
@@ -67,7 +67,7 @@
                   browserXssFilter: true
                   referrerPolicy: "strict-origin-when-cross-origin"
                   customFrameOptionsValue: "SAMEORIGIN"
-              
+
               https-redirect:
                 redirectScheme:
                   scheme: https
@@ -77,25 +77,25 @@
         group: root
         mode: '0644'
       notify: restart traefik
-    
+
     - name: Ensure Traefik can reach Authentik
-      wait_for:
+      ansible.builtin.wait_for:
         host: 192.168.1.13
         port: 9000
         timeout: 30
         msg: "Cannot reach Authentik on pi-d"
-    
+
     - name: Test Authentik API endpoint
-      uri:
+      ansible.builtin.uri:
         url: "{{ authentik_url }}/api/v3/root/config/"
         status_code: 200
       register: authentik_test
       until: authentik_test.status == 200
       retries: 5
       delay: 10
-    
+
   handlers:
     - name: restart traefik
-      systemd:
+      ansible.builtin.systemd:
         name: traefik
         state: restarted

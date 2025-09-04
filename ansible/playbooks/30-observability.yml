@@ -88,7 +88,7 @@
       ansible.builtin.uri:
         url: "http://localhost:3000/api/datasources"
         method: POST
-        user: "{{ grafana_security.admin_user }}"
+        ansible.builtin.user: "{{ grafana_security.admin_user }}"
         password: "{{ grafana_security.admin_password }}"
         force_basic_auth: yes
         body_format: json

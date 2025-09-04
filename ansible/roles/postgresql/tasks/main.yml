@@ -1,7 +1,7 @@
 ---
 # PostgreSQL deployment tasks
 - name: Create postgres user
-  user:
+  ansible.builtin.user:
     name: postgres
     system: yes
     shell: /bin/false
@@ -9,7 +9,7 @@
     create_home: no
 
 - name: Create PostgreSQL directories
-  file:
+  ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
     owner: "{{ item.owner | default('postgres') }}"
@@ -22,7 +22,7 @@
     - { path: "/etc/containers/systemd", owner: "root", group: "root" }
 
 - name: Create PostgreSQL initialization script
-  template:
+  ansible.builtin.template:
     src: init-db.sql.j2
     dest: "{{ postgres_data_dir }}/init-db.sql"
     owner: postgres
@@ -30,35 +30,35 @@
     mode: '0644'
 
 - name: Deploy PostgreSQL container using Quadlet
-  template:
+  ansible.builtin.template:
     src: postgresql.container.j2
     dest: /etc/containers/systemd/postgresql.container
     mode: '0644'
   notify: restart postgresql
 
 - name: Start and enable PostgreSQL service
-  systemd:
+  ansible.builtin.systemd:
     name: postgresql.service
     state: started
     enabled: yes
     daemon_reload: yes
 
 - name: Wait for PostgreSQL to be ready
-  wait_for:
+  ansible.builtin.wait_for:
     port: "{{ postgres_port }}"
     host: "{{ ansible_host }}"
     delay: 10
     timeout: 60
 
 - name: Create backup script
-  template:
+  ansible.builtin.template:
     src: backup-postgres.sh.j2
     dest: /usr/local/bin/backup-postgres
     mode: '0755'
   when: postgres_backup_enabled
 
 - name: Create backup cron job
-  cron:
+  ansible.builtin.cron:
     name: "PostgreSQL backup"
     minute: "0"
     hour: "2"
@@ -67,17 +67,17 @@
   when: postgres_backup_enabled
 
 - name: Display PostgreSQL access information
-  debug:
+  ansible.builtin.debug:
     msg: |
       PostgreSQL has been deployed successfully!
-      
+
       Host: {{ ansible_host }}
       Port: {{ postgres_port }}
-      
+
       Databases created:
       {% for db in postgres_databases %}
       - {{ db.name }} (owner: {{ db.owner }})
       {% endfor %}
-      
+
       Connection example:
       psql -h {{ ansible_host }} -p {{ postgres_port }} -U lldap -d lldap

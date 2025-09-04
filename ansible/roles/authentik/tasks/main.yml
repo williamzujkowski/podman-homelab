@@ -1,10 +1,10 @@
 ---
 - name: Include OS-specific variables
-  include_vars: "{{ ansible_os_family }}.yml"
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
   failed_when: false
 
 - name: Create authentik user
-  user:
+  ansible.builtin.user:
     name: authentik
     uid: 1000
     group: authentik
@@ -15,7 +15,7 @@
     state: present
 
 - name: Create authentik directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: authentik
@@ -34,7 +34,7 @@
     state: present
 
 - name: Generate authentik environment file
-  template:
+  ansible.builtin.template:
     src: authentik.env.j2
     dest: /etc/authentik/authentik.env
     owner: root
@@ -43,7 +43,7 @@
   notify: restart authentik
 
 - name: Create systemd directory for containers
-  file:
+  ansible.builtin.file:
     path: /etc/containers/systemd
     state: directory
     owner: root
@@ -51,7 +51,7 @@
     mode: '0755'
 
 - name: Deploy authentik server quadlet
-  template:
+  ansible.builtin.template:
     src: authentik-server.container.j2
     dest: /etc/containers/systemd/authentik-server.container
     owner: root
@@ -60,7 +60,7 @@
   notify: restart authentik-server
 
 - name: Deploy authentik worker quadlet
-  template:
+  ansible.builtin.template:
     src: authentik-worker.container.j2
     dest: /etc/containers/systemd/authentik-worker.container
     owner: root
@@ -69,7 +69,7 @@
   notify: restart authentik-worker
 
 - name: Create authentik healthcheck script
-  template:
+  ansible.builtin.template:
     src: check-authentik-health.sh.j2
     dest: /usr/local/bin/check-authentik-health
     owner: root
@@ -77,23 +77,23 @@
     mode: '0755'
 
 - name: Reload systemd daemon
-  systemd:
+  ansible.builtin.systemd:
     daemon_reload: yes
 
 - name: Start and enable authentik server
-  systemd:
+  ansible.builtin.systemd:
     name: authentik-server.service
     state: started
     enabled: yes
 
 - name: Start and enable authentik worker
-  systemd:
+  ansible.builtin.systemd:
     name: authentik-worker.service
     state: started
     enabled: yes
 
 - name: Wait for authentik to be ready
-  uri:
+  ansible.builtin.uri:
     url: "http://localhost:{{ authentik_http_port }}/api/v3/root/config/"
     status_code: 200
   register: result
@@ -102,7 +102,7 @@
   delay: 10
 
 - name: Create initial admin user (if bootstrap token provided)
-  uri:
+  ansible.builtin.uri:
     url: "http://localhost:{{ authentik_http_port }}/api/v3/core/users/"
     method: POST
     headers:
@@ -119,4 +119,4 @@
       password: "{{ authentik_bootstrap_password }}"
     status_code: [201, 400]  # 400 if user already exists
   when: authentik_bootstrap_token != ''
-  ignore_errors: yes
+  failed_when: false  # Don't fail if user already exists
