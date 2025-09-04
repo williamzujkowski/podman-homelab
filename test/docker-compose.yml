@@ -1,0 +1,97 @@
+---
+# Authentik Local Test Stack
+version: '3.8'
+
+services:
+  postgresql:
+    image: docker.io/library/postgres:16-alpine
+    container_name: authentik-postgres
+    environment:
+      POSTGRES_PASSWORD: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: docker.io/library/redis:7.2-alpine
+    container_name: authentik-redis
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2024.8.3
+    container_name: authentik-server
+    command: server
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__PORT: 5432
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_REDIS__PORT: 6379
+      AUTHENTIK_SECRET_KEY: "ThisIsATestSecretKeyThatIsAtLeast50CharactersLong!"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_LOG_LEVEL: info
+      AUTHENTIK_EXTERNAL_URL: http://localhost:9000
+      AUTHENTIK_DISABLE_STARTUP_ANALYTICS: "true"
+    ports:
+      - "9000:9000"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/api/v3/root/config/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2024.8.3
+    container_name: authentik-worker
+    command: worker
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__PORT: 5432
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_REDIS__PORT: 6379
+      AUTHENTIK_SECRET_KEY: "ThisIsATestSecretKeyThatIsAtLeast50CharactersLong!"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_LOG_LEVEL: info
+      AUTHENTIK_EXTERNAL_URL: http://localhost:9000
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      authentik-server:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: authentik-test
+    driver: bridge
