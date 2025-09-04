@@ -3,11 +3,19 @@
   hosts: pi-a  # Monitoring node where Grafana runs
   become: yes
   vars:
-    authentik_url: "https://auth.homelab.grenlan.com"
-    grafana_url: "https://grafana.homelab.grenlan.com"
+    # Use IP addresses for initial setup, HTTPS domains for production
+    authentik_url: "http://192.168.1.13:9002"
+    authentik_https_url: "https://auth.homelab.grenlan.com"
+    grafana_url: "http://192.168.1.12:3000"
+    grafana_https_url: "https://grafana.homelab.grenlan.com"
 
   tasks:
-    - name: Update Grafana configuration for OAuth2
+    - name: Check if Grafana is running in container
+      ansible.builtin.stat:
+        path: /etc/grafana/grafana.ini
+      register: grafana_config_file
+
+    - name: Update Grafana configuration for OAuth2 (native install)
       ansible.builtin.blockinfile:
         path: /etc/grafana/grafana.ini
         block: |
@@ -21,11 +29,15 @@
           icon = signin
           client_id = {{ vault_grafana_oauth_client_id | default('grafana') }}
           client_secret = {{ vault_grafana_oauth_client_secret | default('') }}
-          scopes = openid profile email
+          scopes = openid profile email groups
           auth_url = {{ authentik_url }}/application/o/authorize/
           token_url = {{ authentik_url }}/application/o/token/
           api_url = {{ authentik_url }}/application/o/userinfo/
-          allowed_domains = homelab.grenlan.com
+          allowed_domains = 
+          allow_assign_grafana_admin = true
+          auto_assign_org = true
+          auto_assign_org_id = 1
+          auto_assign_org_role = Viewer
           allow_sign_up = true
           role_attribute_path = |
             contains(groups, 'Grafana Admins') && 'Admin' ||
@@ -37,7 +49,43 @@
         marker: "# {mark} ANSIBLE MANAGED BLOCK - Authentik OAuth2"
         create: no
         backup: yes
+      when: grafana_config_file.stat.exists
       notify: restart grafana
+
+    - name: Update Grafana configuration for OAuth2 (container)
+      ansible.builtin.copy:
+        content: |
+          [auth]
+          disable_login_form = false
+          oauth_auto_login = false
+
+          [auth.generic_oauth]
+          enabled = true
+          name = Authentik
+          icon = signin
+          client_id = {{ vault_grafana_oauth_client_id | default('grafana') }}
+          client_secret = {{ vault_grafana_oauth_client_secret | default('') }}
+          scopes = openid profile email groups
+          auth_url = {{ authentik_url }}/application/o/authorize/
+          token_url = {{ authentik_url }}/application/o/token/
+          api_url = {{ authentik_url }}/application/o/userinfo/
+          allowed_domains = 
+          allow_assign_grafana_admin = true
+          auto_assign_org = true
+          auto_assign_org_id = 1
+          auto_assign_org_role = Viewer
+          allow_sign_up = true
+          role_attribute_path = |
+            contains(groups[*].name, 'Grafana Admins') && 'Admin' ||
+            contains(groups[*].name, 'Grafana Editors') && 'Editor' ||
+            'Viewer'
+          email_attribute_path = email
+          name_attribute_path = name
+          login_attribute_path = preferred_username
+        dest: /tmp/grafana-oauth.ini
+        mode: '0644'
+      when: not grafana_config_file.stat.exists
+      notify: restart grafana container
 
     - name: Create instructions for Authentik configuration
       ansible.builtin.copy:
@@ -94,3 +142,9 @@
       ansible.builtin.systemd:
         name: grafana-server
         state: restarted
+
+    - name: restart grafana container
+      ansible.builtin.command:
+        cmd: podman restart systemd-grafana
+      become: yes
+      ignore_errors: yes

@@ -13,7 +13,7 @@ loglevel notice
 databases 16
 
 # Persistence
-dir {{ redis_data_path }}
+dir /data
 {% if redis_save_enabled %}
 save 900 1
 save 300 10

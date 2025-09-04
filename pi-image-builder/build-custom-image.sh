@@ -111,7 +111,7 @@ timezone: America/New_York
 # Create user
 users:
   - name: pi
-    groups: [adm, sudo, docker]
+    groups: [adm, sudo, podman]
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
     lock_passwd: false

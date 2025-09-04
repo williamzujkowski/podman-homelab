@@ -1,0 +1,30 @@
+---
+- name: Ensure Traefik dynamic configuration directory exists
+  ansible.builtin.file:
+    path: /etc/traefik/dynamic
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+
+- name: Copy Authentik ForwardAuth configuration
+  ansible.builtin.copy:
+    src: authentik.yml
+    dest: /etc/traefik/dynamic/authentik.yml
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+  notify: reload traefik
+
+- name: Verify Traefik container is running
+  containers.podman.podman_container_info:
+    name: systemd-traefik
+  register: traefik_info
+  become: yes
+
+- name: Display Traefik container status
+  ansible.builtin.debug:
+    msg: "Traefik container status: {{ traefik_info.containers[0].State if traefik_info.containers else 'Not found' }}"

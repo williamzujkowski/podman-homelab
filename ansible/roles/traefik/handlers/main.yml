@@ -1,0 +1,6 @@
+---
+- name: reload traefik
+  ansible.builtin.shell: |
+    podman restart systemd-traefik
+  become: yes
+  listen: reload traefik

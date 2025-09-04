@@ -1,0 +1,45 @@
+apiVersion: 1
+
+providers:
+  - name: 'homelab-dashboards'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: {{ grafana_dashboards_dir }}
+
+  # Homelab folder dashboards
+  - name: 'homelab-cluster'
+    orgId: 1
+    folder: 'Homelab'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: {{ grafana_dashboards_dir }}
+
+  # Security folder dashboards  
+  - name: 'homelab-security'
+    orgId: 1
+    folder: 'Security'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: {{ grafana_dashboards_dir }}
+
+  # Alerts folder dashboards
+  - name: 'homelab-alerts'
+    orgId: 1
+    folder: 'Alerts'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: {{ grafana_dashboards_dir }}

@@ -174,7 +174,7 @@ prefer_fqdn_over_hostname: false
 # Create users with multiple access methods
 users:
   - name: pi
-    groups: [adm, sudo, docker, dialout]
+    groups: [adm, sudo, podman, dialout]
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
     lock_passwd: false

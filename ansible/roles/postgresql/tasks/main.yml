@@ -36,12 +36,15 @@
     mode: '0644'
   notify: restart postgresql
 
+- name: Reload systemd daemon for Quadlet
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
 - name: Start and enable PostgreSQL service
   ansible.builtin.systemd:
     name: postgresql.service
     state: started
     enabled: yes
-    daemon_reload: yes
 
 - name: Wait for PostgreSQL to be ready
   ansible.builtin.wait_for:

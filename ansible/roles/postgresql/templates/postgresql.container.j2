@@ -6,6 +6,7 @@ Wants=network-online.target
 [Container]
 Image={{ postgres_image }}
 ContainerName={{ postgres_container_name }}
+Network={{ postgres_network | default('authentik') }}
 
 # Network ports
 PublishPort={{ postgres_port }}:5432

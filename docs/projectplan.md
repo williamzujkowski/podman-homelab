@@ -153,7 +153,7 @@ jobs:
         with: { python-version: '3.11' }
       - name: Install deps
         run: |
-          pip install ansible ansible-lint yamllint molecule docker pytest
+          pip install ansible ansible-lint yamllint molecule molecule-podman pytest
           ansible-galaxy collection install containers.podman
       - name: Lint
         run: |

@@ -1,29 +1,41 @@
 ---
 - name: Configure Emergency Access and Fallback Mechanisms
-  hosts: all_pis
+  hosts: pis
   become: yes
   vars:
     emergency_ssh_port: 2222  # Backup SSH port
     emergency_user: "pi-emergency"
     emergency_web_port: 8443  # Direct access to services
+    # Default values - should be overridden with vault in production
+    vault_emergency_password: "ChangeMe123!"
+    vault_emergency_ssh_pubkey: ""
     
   tasks:
     - name: Ensure SSH remains independent of Authentik
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
-        regexp: "^#?Port "
+        regexp: "^#?Port 22"
         line: "Port 22"
         state: present
         backup: yes
       notify: restart sshd
     
-    - name: Create emergency SSH configuration on alternate port
+    - name: Add emergency SSH port to main config
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?Port {{ emergency_ssh_port }}"
+        line: "Port {{ emergency_ssh_port }}"
+        insertafter: "^Port 22"
+        state: present
+      notify: restart sshd
+    
+    - name: Create emergency SSH configuration
       ansible.builtin.blockinfile:
         path: /etc/ssh/sshd_config.d/99-emergency.conf
         create: yes
         block: |
           # Emergency SSH Access - Never modify both SSH configs in same change
-          Port {{ emergency_ssh_port }}
+          # Note: Port configuration is in main sshd_config
           PasswordAuthentication no
           PubkeyAuthentication yes
           PermitRootLogin no
@@ -36,7 +48,7 @@
         name: "{{ emergency_user }}"
         groups: sudo
         shell: /bin/bash
-        password: "{{ vault_emergency_password | password_hash('sha512') }}"
+        password: "{{ vault_emergency_password | default('ChangeMe123!') | password_hash('sha512') }}"
         update_password: on_create
         comment: "Emergency Access User - Use only when primary auth fails"
     
@@ -46,7 +58,7 @@
         state: present
         key: "{{ vault_emergency_ssh_pubkey }}"
         exclusive: no
-      when: vault_emergency_ssh_pubkey is defined
+      when: vault_emergency_ssh_pubkey is defined and vault_emergency_ssh_pubkey != ''
     
     - name: Create Traefik bypass configuration
       ansible.builtin.copy:
@@ -242,5 +254,5 @@
   handlers:
     - name: restart sshd
       ansible.builtin.systemd:
-        name: sshd
+        name: ssh
         state: restarted

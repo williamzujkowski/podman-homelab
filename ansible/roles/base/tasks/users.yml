@@ -6,7 +6,6 @@
     name: "{{ item }}"
     state: present
   loop:
-    - docker
     - podman
   become: yes
 

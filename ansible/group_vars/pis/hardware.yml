@@ -39,6 +39,3 @@ package_repos:
   - name: ubuntu-ports
     url: http://ports.ubuntu.com/ubuntu-ports
     components: [main, restricted, universe, multiverse]
-  - name: docker-arm64
-    url: https://download.docker.com/linux/ubuntu
-    arch: arm64

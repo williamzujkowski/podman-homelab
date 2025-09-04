@@ -5,11 +5,15 @@
   vars:
     authentik_secret_key: "{{ lookup('password', '/dev/null length=50 chars=ascii_letters,digits') }}"
     authentik_postgres_password: "{{ vault_authentik_db_password | default('AuthentikDB123!') }}"
-    authentik_redis_host: "localhost"
-    authentik_postgres_host: "localhost"
+    authentik_redis_host: "redis"
+    authentik_postgres_host: "postgresql"
     authentik_external_url: "https://auth.homelab.grenlan.com"
     authentik_bootstrap_password: "{{ vault_authentik_admin_password | default('ChangeMe123!') }}"
     authentik_bootstrap_email: "admin@homelab.grenlan.com"
+    # PostgreSQL role variables
+    postgres_authentik_user: "authentik"
+    postgres_authentik_password: "{{ authentik_postgres_password }}"
+    postgres_authentik_db: "authentik"
 
   pre_tasks:
     - name: Ensure Podman is installed
@@ -47,6 +51,6 @@
         proto: tcp
         comment: "Authentik {{ item }}"
       loop:
-        - "{{ authentik_http_port | default(9000) }}"
-        - "{{ authentik_https_port | default(9443) }}"
+        - "{{ authentik_http_port | default(9002) }}"
+        - "{{ authentik_https_port | default(9003) }}"
       when: ansible_facts['os_family'] == 'Debian'

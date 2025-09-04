@@ -15,7 +15,7 @@ NC='\033[0m'
 # Clean up function
 cleanup() {
     echo -e "\n${YELLOW}Cleaning up...${NC}"
-    docker-compose -f test/docker-compose.yml down -v
+    podman-compose -f test/docker-compose.yml down -v
 }
 
 # Set trap for cleanup
@@ -25,14 +25,14 @@ trap cleanup EXIT
 cd "$(dirname "$0")/.."
 
 echo -e "\n${YELLOW}Starting services...${NC}"
-docker-compose -f test/docker-compose.yml up -d
+podman-compose -f test/docker-compose.yml up -d
 
 echo -e "\n${YELLOW}Waiting for PostgreSQL...${NC}"
-timeout 60 bash -c 'until docker exec authentik-postgres pg_isready -U authentik > /dev/null 2>&1; do sleep 2; done'
+timeout 60 bash -c 'until podman exec authentik-postgres pg_isready -U authentik > /dev/null 2>&1; do sleep 2; done'
 echo -e "${GREEN}✓ PostgreSQL ready${NC}"
 
 echo -e "\n${YELLOW}Waiting for Redis...${NC}"
-timeout 30 bash -c 'until docker exec authentik-redis redis-cli ping > /dev/null 2>&1; do sleep 2; done'
+timeout 30 bash -c 'until podman exec authentik-redis redis-cli ping > /dev/null 2>&1; do sleep 2; done'
 echo -e "${GREEN}✓ Redis ready${NC}"
 
 echo -e "\n${YELLOW}Waiting for Authentik Server (this may take 2-3 minutes)...${NC}"
@@ -52,7 +52,7 @@ fi
 
 # Test 2: Database connectivity
 echo -n "Testing database connectivity... "
-if docker exec authentik-postgres psql -U authentik -d authentik -c "SELECT 1" > /dev/null 2>&1; then
+if podman exec authentik-postgres psql -U authentik -d authentik -c "SELECT 1" > /dev/null 2>&1; then
     echo -e "${GREEN}✓ PASS${NC}"
 else
     echo -e "${RED}✗ FAIL${NC}"
@@ -61,7 +61,7 @@ fi
 
 # Test 3: Redis connectivity
 echo -n "Testing Redis connectivity... "
-if docker exec authentik-redis redis-cli ping | grep -q PONG; then
+if podman exec authentik-redis redis-cli ping | grep -q PONG; then
     echo -e "${GREEN}✓ PASS${NC}"
 else
     echo -e "${RED}✗ FAIL${NC}"
@@ -70,7 +70,7 @@ fi
 
 # Test 4: Worker running
 echo -n "Testing worker container... "
-if docker ps | grep -q authentik-worker; then
+if podman ps | grep -q authentik-worker; then
     echo -e "${GREEN}✓ PASS${NC}"
 else
     echo -e "${RED}✗ FAIL${NC}"
@@ -88,7 +88,7 @@ fi
 
 # Test 6: Memory usage
 echo -e "\n${YELLOW}Checking resource usage...${NC}"
-docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.CPUPerc}}" | grep authentik || true
+podman stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.CPUPerc}}" | grep authentik || true
 
 echo -e "\n${GREEN}========================================${NC}"
 echo -e "${GREEN}✅ All tests passed!${NC}"
@@ -98,8 +98,8 @@ echo -e "\n${YELLOW}Authentik is running at:${NC} http://localhost:9000"
 echo -e "${YELLOW}Default credentials:${NC} akadmin / <set on first login>"
 
 echo -e "\n${YELLOW}To access container logs:${NC}"
-echo "docker logs authentik-server"
-echo "docker logs authentik-worker"
+echo "podman logs authentik-server"
+echo "podman logs authentik-worker"
 
 echo -e "\n${YELLOW}To stop the test environment, press Ctrl+C${NC}"
 echo -e "${YELLOW}The environment will be automatically cleaned up${NC}"

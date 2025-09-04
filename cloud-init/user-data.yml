@@ -3,7 +3,7 @@
 users:
   - default
   - name: ubuntu
-    groups: sudo, docker
+    groups: sudo, podman
     shell: /bin/bash
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
     ssh_authorized_keys:

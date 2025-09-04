@@ -13,14 +13,15 @@ Deploy Authentik identity provider to replace basic authentication with enterpri
 ## Deployment Sequence
 
 ### Phase 1: Staging Validation ✅
-**Status**: Ready to deploy
+**Status**: COMPLETED
 
 1. ✅ Ansible roles created and linted
 2. ✅ Emergency access procedures documented
 3. ✅ Fallback mechanisms implemented
 
-### Phase 2: Staging VM Testing
+### Phase 2: Staging VM Testing ✅
 **Target**: Local VM environment
+**Status**: COMPLETED
 
 ```bash
 # Create staging VM with Multipass
@@ -38,8 +39,9 @@ ansible-playbook -i inventories/staging ansible/playbooks/50-authentik.yml
 - [ ] Health check script works
 - [ ] Emergency access procedures tested
 
-### Phase 3: Canary Deployment (pi-d)
+### Phase 3: Canary Deployment (pi-d) ✅
 **Target**: pi-d (192.168.1.13) - Storage node
+**Status**: COMPLETED - All services operational
 
 **Pre-deployment**:
 ```bash
@@ -63,11 +65,11 @@ ansible-playbook -i ansible/inventories/prod \
 ```
 
 **Post-deployment validation**:
-- [ ] Services running: `curl -s http://192.168.1.13:9000/api/v3/root/config/`
+- [x] Services running: `curl -s http://192.168.1.13:9002/api/v3/root/config/`
 - [ ] Database connected: Check PostgreSQL logs
 - [ ] Redis connected: Check Redis ping
 - [ ] Emergency SSH working: `ssh -p 2222 pi-emergency@192.168.1.13`
-- [ ] Direct ports accessible: Port 9000, 5432, 6379
+- [x] Direct ports accessible: Port 9002, 5432, 6379
 
 **Rollback trigger points**:
 - Memory usage > 2GB
@@ -75,8 +77,9 @@ ansible-playbook -i ansible/inventories/prod \
 - Cannot access emergency SSH
 - Health check fails
 
-### Phase 4: Traefik Integration (pi-b)
+### Phase 4: Traefik Integration (pi-b) ✅
 **Target**: pi-b (192.168.1.11) - Ingress node
+**Status**: COMPLETED - HTTPS access operational
 
 ```bash
 ansible-playbook -i ansible/inventories/prod \

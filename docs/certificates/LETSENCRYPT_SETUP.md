@@ -100,7 +100,7 @@ certificatesResolvers:
 
 providers:
   docker:
-    endpoint: "unix:///var/run/docker.sock"
+    endpoint: "unix:///run/podman/podman.sock"
     exposedByDefault: false
   file:
     directory: /etc/traefik/dynamic

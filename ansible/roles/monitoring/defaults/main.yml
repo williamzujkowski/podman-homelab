@@ -102,6 +102,21 @@ grafana_dashboards:
   - name: node-exporter
     folder: "System"
     path: "{{ role_path }}/files/dashboards/node-exporter.json"
+  - name: cluster-overview
+    folder: "Homelab"
+    path: "{{ playbook_dir }}/../grafana-dashboards/cluster-overview.json"
+  - name: node-details
+    folder: "Homelab"
+    path: "{{ playbook_dir }}/../grafana-dashboards/node-details.json"
+  - name: service-health
+    folder: "Homelab"
+    path: "{{ playbook_dir }}/../grafana-dashboards/service-health.json"
+  - name: authentik-monitoring
+    folder: "Security"
+    path: "{{ playbook_dir }}/../grafana-dashboards/authentik-monitoring.json"
+  - name: alert-dashboard
+    folder: "Alerts"
+    path: "{{ playbook_dir }}/../grafana-dashboards/alert-dashboard.json"
 
 # Firewall ports to open
 monitoring_firewall_ports:

@@ -1,6 +1,6 @@
 # Production Deployment Summary
 
-**Date:** 2025-08-28  
+**Date:** 2025-09-04 (Updated)  
 **Environment:** Production Raspberry Pi Cluster  
 **Status:** ✅ **FULLY OPERATIONAL**
 
@@ -28,14 +28,18 @@ The homelab infrastructure has been successfully deployed to production Raspberr
 - **Promtail v2.9.3**: Log collection agent
 
 #### Ingress Controller (pi-b)
-- **Caddy v2.7**: Reverse proxy with automatic HTTPS
+- **Traefik**: Reverse proxy with Let's Encrypt HTTPS
+- **Let's Encrypt**: Automated certificate management via certbot
 - **Node Exporter v1.7.0**: System metrics
 
 #### Worker Services (pi-c)
 - **Node Exporter v1.7.0**: System metrics
 - Application containers (ready for deployment)
 
-#### Storage Services (pi-d)
+#### Storage & Authentication Services (pi-d)
+- **Authentik v2024.10**: Identity provider and SSO
+- **PostgreSQL v16**: Database backend for Authentik
+- **Redis v7**: Cache and task queue
 - **Node Exporter v1.7.0**: System metrics
 - MinIO (ready for deployment)
 - Backup services (configured)
@@ -43,11 +47,11 @@ The homelab infrastructure has been successfully deployed to production Raspberr
 ## Security Configuration
 
 ### Certificate Management
-- **Type**: Cloudflare Origin CA
-- **Validity**: 15 years (expires 2040)
+- **Type**: Let's Encrypt with Cloudflare DNS-01 challenge
+- **Validity**: 90 days (auto-renewal ~30 days before expiry)
 - **Coverage**: `*.homelab.grenlan.com`, `homelab.grenlan.com`
-- **Storage**: `/etc/ssl/cloudflare/` on pi-b
-- **Automation**: Daily expiry checks via systemd timer
+- **Storage**: `/etc/letsencrypt/live/homelab.grenlan.com/` on pi-b
+- **Automation**: `certbot-renew.timer` runs twice daily
 
 ### Network Security
 - **Access Control**: Services only accessible from local network (192.168.1.0/24)
@@ -69,22 +73,26 @@ The homelab infrastructure has been successfully deployed to production Raspberr
 http://192.168.1.12:3000  # Grafana
 http://192.168.1.12:9090  # Prometheus
 http://192.168.1.12:3100  # Loki
+http://192.168.1.13:9002  # Authentik
+http://192.168.1.11:8080  # Traefik Dashboard
 ```
 
-### HTTPS Access with Cloudflare CA
+### HTTPS Access with Let's Encrypt
 1. Add to `/etc/hosts`:
 ```
 192.168.1.11  homelab.grenlan.com
 192.168.1.11  grafana.homelab.grenlan.com
 192.168.1.11  prometheus.homelab.grenlan.com
 192.168.1.11  loki.homelab.grenlan.com
+192.168.1.11  auth.homelab.grenlan.com
 ```
 
-2. Access services:
+2. Access services (Browser-trusted ✅):
 ```
 https://grafana.homelab.grenlan.com
 https://prometheus.homelab.grenlan.com
 https://loki.homelab.grenlan.com
+https://auth.homelab.grenlan.com
 ```
 
 ## Deployment Methodology
@@ -141,10 +149,10 @@ ansible-playbook -i ansible/inventories/prod/hosts.yml \
 ## Performance Metrics
 
 ### Resource Utilization (Average)
-- **CPU**: ~15% across all nodes
-- **Memory**: ~2GB used of 8GB available
-- **Storage**: ~20GB used of 256GB available
-- **Network**: < 10Mbps internal traffic
+- **CPU**: ~15-20% across all nodes
+- **Memory**: ~3GB used of 32GB total cluster (8GB per node)
+- **Storage**: ~25GB used of 1.2TB total cluster
+- **Network**: <5Mbps internal traffic
 
 ### Service Availability
 - **Uptime**: 100% since deployment
@@ -171,9 +179,9 @@ ansible-playbook -i ansible/inventories/prod/hosts.yml \
 
 ## Known Issues & Limitations
 
-1. **Grafana/Loki Targets**: Show as DOWN in Prometheus due to localhost binding (non-critical)
-2. **Caddy Health Check**: Port 2019 admin API not exposed externally (by design)
-3. **IPv6**: Not configured (future enhancement)
+1. **Service Integration**: Grafana OAuth2 with Authentik pending configuration
+2. **IPv6**: Not configured (future enhancement)
+3. **MinIO**: Deployment ready but not yet activated
 
 ## Future Enhancements
 
@@ -183,9 +191,9 @@ ansible-playbook -i ansible/inventories/prod/hosts.yml \
 - [ ] Add custom Grafana dashboards
 - [ ] Configure Prometheus alerting rules
 
-### Phase 2 (Q3 2025)
-- [ ] Implement Vault for secrets management
-- [ ] Add Keycloak for SSO
+### Phase 2 (Q4 2025)
+- [x] Deploy Authentik for SSO (COMPLETED)
+- [ ] Complete Grafana OAuth2 integration
 - [ ] Deploy GitLab Runner for CI/CD
 - [ ] Implement service mesh with Linkerd
 
@@ -246,6 +254,6 @@ The production deployment is **fully operational** with all services running as 
 
 ---
 
-*Last Updated: 2025-08-28 by Swarm Orchestration*  
+*Last Updated: 2025-09-04 by Infrastructure Update*  
 *Infrastructure Version: v1.0.0*  
 *Deployment Method: Ansible + Podman Quadlet*

@@ -11,15 +11,15 @@
 ### Production Raspberry Pi Cluster
 | Node | IP | Role | Services |
 |------|-----|------|----------|
-| **pi-a** | 192.168.1.12 | Monitoring/Canary | Prometheus, Grafana, Loki |
-| **pi-b** | 192.168.1.11 | Ingress | Caddy/Traefik |
-| **pi-c** | 192.168.1.10 | Worker | Application services |
-| **pi-d** | 192.168.1.13 | Storage | MinIO, Backups |
+| **pi-a** | 192.168.1.12 | Monitoring/Canary | Prometheus, Grafana, Loki, Node Exporter |
+| **pi-b** | 192.168.1.11 | Ingress | Traefik, Node Exporter |
+| **pi-c** | 192.168.1.10 | Worker | Node Exporter, Application services |
+| **pi-d** | 192.168.1.13 | Storage/Auth | PostgreSQL, Redis, Authentik, MinIO, Node Exporter |
 
 ### Access Points
-- **Direct**: `http://192.168.1.12:3000` (Grafana), `http://192.168.1.12:9090` (Prometheus)
-- **Via Ingress**: `https://grafana.homelab.grenlan.com` (requires /etc/hosts entry)
-- **Certificate**: Cloudflare Origin CA (15-year validity)
+- **Direct**: `http://192.168.1.12:3000` (Grafana), `http://192.168.1.12:9090` (Prometheus), `http://192.168.1.12:3100` (Loki), `http://192.168.1.13:9002` (Authentik), `http://192.168.1.11:8080` (Traefik Dashboard)
+- **Via Ingress**: `https://grafana.homelab.grenlan.com`, `https://prometheus.homelab.grenlan.com`, `https://auth.homelab.grenlan.com` (requires /etc/hosts entry)
+- **Certificate**: Let's Encrypt via certbot with Cloudflare DNS-01 challenge (90-day validity)
 
 ---
 
@@ -180,7 +180,7 @@ ssh pi@192.168.1.11 "sudo /opt/certbot-env/bin/certbot certificates"
 ssh pi@192.168.1.11 "sudo systemctl status certbot-renew.timer"
 
 # Force certificate copy to Traefik (if needed)
-ssh pi@192.168.1.11 "sudo cp /etc/letsencrypt/live/homelab.grenlan.com/*.pem /etc/traefik/certs/ && podman restart systemd-traefik"
+ssh pi@192.168.1.11 "sudo cp /etc/letsencrypt/live/homelab.grenlan.com/*.pem /etc/traefik/certs/ && sudo systemctl restart traefik"
 ```
 
 ## 11) Emergency rollbacks
@@ -198,26 +198,33 @@ ssh pi@192.168.1.11 "sudo cp /etc/letsencrypt/live/homelab.grenlan.com/*.pem /et
 - **Grafana**: http://192.168.1.12:3000 (admin/admin)
 - **Prometheus**: http://192.168.1.12:9090
 - **Loki**: http://192.168.1.12:3100
+- **Authentik**: http://192.168.1.13:9002 (akadmin/vault_password)
+- **Traefik Dashboard**: http://192.168.1.11:8080
+- **PostgreSQL**: 192.168.1.13:5432
+- **Redis**: 192.168.1.13:6379
 
 ### HTTPS Access (with Let's Encrypt)
 Certificates are managed via certbot with Cloudflare DNS-01 challenge.
 
 Add to `/etc/hosts`:
 ```
-192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com
+192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com auth.homelab.grenlan.com
 ```
 
 Then access:
 - https://grafana.homelab.grenlan.com (browser-trusted ✅)
 - https://prometheus.homelab.grenlan.com (browser-trusted ✅)
 - https://loki.homelab.grenlan.com (browser-trusted ✅)
+- https://auth.homelab.grenlan.com (browser-trusted ✅)
 
 ### Quick Commands
 ```bash
 # Check all services
-curl -s http://192.168.1.12:9090/-/healthy  # Prometheus
-curl -s http://192.168.1.12:3000/api/health  # Grafana
-curl -s http://192.168.1.12:3100/ready       # Loki
+curl -s http://192.168.1.12:9090/-/healthy      # Prometheus
+curl -s http://192.168.1.12:3000/api/health     # Grafana
+curl -s http://192.168.1.12:3100/ready          # Loki
+curl -s http://192.168.1.13:9002/api/v3/root/config/  # Authentik
+curl -s http://192.168.1.11:8080/ping           # Traefik
 
 # SSH to nodes
 ssh pi@192.168.1.12  # pi-a (monitoring)

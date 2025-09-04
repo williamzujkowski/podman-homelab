@@ -11,7 +11,7 @@ EnvironmentFile=/etc/authentik/authentik.env
 Volume={{ authentik_media_path }}:/media:Z
 Volume={{ authentik_templates_path }}:/templates:Z
 Volume={{ authentik_geoip_path }}:/geoip:Z
-PodmanArgs=--memory={{ authentik_worker_memory_limit }} --cpus={{ authentik_worker_cpu_limit }}
+PodmanArgs=--memory={{ authentik_worker_memory_limit }} --cpus={{ authentik_worker_cpu_limit }} --user=997:986
 HealthCmd=/lifecycle/ak healthcheck
 HealthInterval=30s
 HealthRetries=3

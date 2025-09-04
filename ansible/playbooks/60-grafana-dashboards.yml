@@ -1,0 +1,135 @@
+---
+# Deploy comprehensive Grafana dashboards for homelab monitoring
+# This playbook imports all custom dashboards created for the Pi cluster
+
+- name: Import Grafana Dashboards
+  hosts: monitoring_nodes
+  become: yes
+  vars:
+    grafana_api_url: "http://localhost:3000"
+    grafana_api_user: "admin"
+    grafana_api_password: "{{ grafana_admin_password | default('admin') }}"
+    dashboard_source_dir: "{{ playbook_dir }}/../grafana-dashboards"
+    grafana_dashboards_dir: "/var/lib/grafana/dashboards"
+    
+    # List of dashboards to import
+    homelab_dashboards:
+      - name: "cluster-overview"
+        file: "cluster-overview.json"
+        folder: "Homelab"
+        description: "Cluster-wide overview of all nodes and services"
+      - name: "node-details" 
+        file: "node-details.json"
+        folder: "Homelab"
+        description: "Detailed metrics for individual nodes"
+      - name: "service-health"
+        file: "service-health.json"
+        folder: "Homelab" 
+        description: "Service status and health monitoring"
+      - name: "authentik-monitoring"
+        file: "authentik-monitoring.json"
+        folder: "Security"
+        description: "Authentication service monitoring"
+      - name: "alert-dashboard"
+        file: "alert-dashboard.json"
+        folder: "Alerts"
+        description: "Critical alerts and thresholds"
+
+  tasks:
+    - name: Ensure Grafana is running and accessible
+      uri:
+        url: "{{ grafana_api_url }}/api/health"
+        method: GET
+        status_code: 200
+      retries: 5
+      delay: 10
+      
+    - name: Create dashboard directories
+      file:
+        path: "{{ grafana_dashboards_dir }}"
+        state: directory
+        owner: grafana
+        group: grafana
+        mode: '0755'
+
+    - name: Copy dashboard files to Grafana server
+      copy:
+        src: "{{ dashboard_source_dir }}/{{ item.file }}"
+        dest: "{{ grafana_dashboards_dir }}/{{ item.file }}"
+        owner: grafana
+        group: grafana
+        mode: '0644'
+      loop: "{{ homelab_dashboards }}"
+      notify: restart grafana
+      
+    - name: Create Grafana folders via API
+      uri:
+        url: "{{ grafana_api_url }}/api/folders"
+        method: POST
+        user: "{{ grafana_api_user }}"
+        password: "{{ grafana_api_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          title: "{{ item }}"
+          uid: "{{ item | lower | replace(' ', '-') }}"
+        status_code: [200, 409]  # 409 = already exists
+      loop: "{{ homelab_dashboards | map(attribute='folder') | unique | list }}"
+      
+    - name: Import dashboards via Grafana API
+      uri:
+        url: "{{ grafana_api_url }}/api/dashboards/db"
+        method: POST
+        user: "{{ grafana_api_user }}"
+        password: "{{ grafana_api_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body: "{{ lookup('file', dashboard_source_dir + '/' + item.file) | from_json }}"
+        status_code: 200
+      loop: "{{ homelab_dashboards }}"
+      register: dashboard_import_result
+      
+    - name: Display dashboard import results
+      debug:
+        msg: "Dashboard {{ item.item.name }} imported successfully: {{ item.json.status }}"
+      loop: "{{ dashboard_import_result.results }}"
+      when: item.json is defined
+      
+    - name: Update dashboard provisioning configuration
+      template:
+        src: dashboards-provisioning.yml.j2
+        dest: /etc/grafana/provisioning/dashboards/homelab-dashboards.yml
+        owner: root
+        group: grafana
+        mode: '0640'
+      notify: restart grafana
+      
+    - name: Verify dashboards are accessible
+      uri:
+        url: "{{ grafana_api_url }}/api/search?query={{ item.name }}"
+        method: GET
+        user: "{{ grafana_api_user }}"
+        password: "{{ grafana_api_password }}"
+        force_basic_auth: yes
+        status_code: 200
+      loop: "{{ homelab_dashboards }}"
+      register: dashboard_verify
+      
+    - name: Report dashboard verification results
+      debug:
+        msg: "Dashboard {{ item.item.name }} found: {{ item.json | length > 0 }}"
+      loop: "{{ dashboard_verify.results }}"
+      
+  handlers:
+    - name: restart grafana
+      systemd:
+        name: grafana-server
+        state: restarted
+        daemon_reload: yes
+      
+    - name: Wait for Grafana to be ready after restart
+      wait_for:
+        port: 3000
+        host: "{{ ansible_host }}"
+        timeout: 60
+        state: started

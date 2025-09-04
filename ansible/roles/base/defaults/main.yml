@@ -6,7 +6,7 @@ base_users:
   - name: william
     groups:
       - sudo
-      - docker
+      - podman
     shell: /bin/bash
     create_home: yes
   - name: breakfix

@@ -22,14 +22,14 @@ Authentik is deployed on **pi-d** (192.168.1.13) - the storage node with suffici
 - **Storage**: ~500MB for application + database growth
 
 ### Ports
-- `9000`: HTTP (internal API and web interface)
+- `9002`: HTTP (internal API and web interface)
 - `9443`: HTTPS (optional, we use Traefik instead)
 - `9300`: Metrics (Prometheus)
 
 ## Access URLs
 
 - **External**: https://auth.homelab.grenlan.com (via Traefik on pi-b)
-- **Internal**: http://192.168.1.13:9000
+- **Internal**: http://192.168.1.13:9002
 - **API**: https://auth.homelab.grenlan.com/api/v3/
 
 ## Default Credentials
@@ -155,7 +155,7 @@ Configure Prometheus alerts for:
 
 1. **Cannot access web interface**
    - Check container status: `sudo systemctl status authentik-server`
-   - Verify network: `curl http://localhost:9000/api/v3/root/config/`
+   - Verify network: `curl http://localhost:9002/api/v3/root/config/`
    - Check logs: `sudo podman logs authentik-server`
 
 2. **Worker not processing tasks**
@@ -243,7 +243,7 @@ To prevent complete lockout, multiple access methods are maintained:
    # Critical services remain accessible
    http://192.168.1.12:9090  # Prometheus
    http://192.168.1.12:3000  # Grafana
-   http://192.168.1.13:9000  # Authentik admin
+   http://192.168.1.13:9002  # Authentik admin
    ```
 
 3. **Emergency Bypass Scripts** (on pi-b)

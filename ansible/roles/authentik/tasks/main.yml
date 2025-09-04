@@ -3,10 +3,15 @@
   ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
   failed_when: false
 
+- name: Create authentik group
+  ansible.builtin.group:
+    name: authentik
+    system: yes
+    state: present
+
 - name: Create authentik user
   ansible.builtin.user:
     name: authentik
-    uid: 1000
     group: authentik
     system: yes
     shell: /usr/sbin/nologin
@@ -40,7 +45,9 @@
     owner: root
     group: authentik
     mode: '0640'
-  notify: restart authentik
+  notify: 
+    - restart authentik-server
+    - restart authentik-worker
 
 - name: Create systemd directory for containers
   ansible.builtin.file:

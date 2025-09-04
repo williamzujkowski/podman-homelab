@@ -1,6 +1,6 @@
 # Homelab Infrastructure Access Guide
 
-**Last Updated:** 2025-08-28  
+**Last Updated:** 2025-09-04  
 **Environment:** PRODUCTION (Raspberry Pi Cluster)  
 **Status:** ✅ OPERATIONAL
 
@@ -13,22 +13,25 @@
 | **Prometheus** | http://192.168.1.12:9090 | None | ✅ Running |
 | **Grafana** | http://192.168.1.12:3000 | admin/admin | ✅ Running |
 | **Loki** | http://192.168.1.12:3100 | None | ✅ Running |
+| **Authentik** | http://192.168.1.13:9002 | akadmin/vault_password | ✅ Running |
+| **Traefik Dashboard** | http://192.168.1.11:8080 | None | ✅ Running |
 | **Node Exporter (pi-a)** | http://192.168.1.12:9100/metrics | None | ✅ Running |
 | **Node Exporter (pi-b)** | http://192.168.1.11:9100/metrics | None | ✅ Running |
 | **Node Exporter (pi-c)** | http://192.168.1.10:9100/metrics | None | ✅ Running |
 | **Node Exporter (pi-d)** | http://192.168.1.13:9100/metrics | None | ✅ Running |
 
-### Ingress URLs (via Caddy/Traefik on pi-b)
+### Ingress URLs (via Traefik on pi-b)
 
 | Service | URL | Notes |
 |---------|-----|-------|
-| **Prometheus** | https://prometheus.homelab.grenlan.com | Cloudflare Origin CA |
-| **Grafana** | https://grafana.homelab.grenlan.com | Cloudflare Origin CA |
-| **Loki** | https://loki.homelab.grenlan.com | Cloudflare Origin CA |
+| **Prometheus** | https://prometheus.homelab.grenlan.com | Let's Encrypt ✅ |
+| **Grafana** | https://grafana.homelab.grenlan.com | Let's Encrypt ✅ |
+| **Loki** | https://loki.homelab.grenlan.com | Let's Encrypt ✅ |
+| **Authentik** | https://auth.homelab.grenlan.com | Let's Encrypt ✅ |
 
 **Note**: Add these to your `/etc/hosts` file:
 ```
-192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com
+192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com auth.homelab.grenlan.com
 ```
 
 ## 📊 Infrastructure Overview
@@ -38,18 +41,20 @@
 | Node | IP Address | Role | Services |
 |------|------------|------|----------|
 | **pi-a** | 192.168.1.12 | Monitoring/Canary | Prometheus, Grafana, Loki, Promtail |
-| **pi-b** | 192.168.1.11 | Ingress | Caddy/Traefik, Node Exporter |
+| **pi-b** | 192.168.1.11 | Ingress | Traefik, Node Exporter |
 | **pi-c** | 192.168.1.10 | Worker/Apps | Application services, Node Exporter |
-| **pi-d** | 192.168.1.13 | Storage/Backup | MinIO, Backup services, Node Exporter |
+| **pi-d** | 192.168.1.13 | Storage/Auth | PostgreSQL, Redis, Authentik, MinIO, Node Exporter |
 
 ### Service Status Summary
 
 - ✅ **Prometheus**: Collecting metrics from all node exporters
 - ✅ **Grafana**: Operational with Prometheus datasource
 - ✅ **Loki**: Receiving logs from Promtail
-- ✅ **Caddy**: Running as ingress controller (ports 80, 443)
-- ✅ **Node Exporters**: Running on all VMs (3/3)
-- ✅ **Promtail**: Collecting logs on vm-a and vm-b
+- ✅ **Traefik**: Running as ingress controller (ports 80, 443, 8080)
+- ✅ **Authentik**: Identity provider operational (port 9002)
+- ✅ **PostgreSQL**: Database backend for Authentik
+- ✅ **Node Exporters**: Running on all Pis (4/4)
+- ✅ **Promtail**: Collecting logs from all services
 
 ## 🔧 Administrative Tasks
 
@@ -91,8 +96,11 @@ ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo podman logs
 # View Loki logs
 ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo podman logs --tail 50 loki"
 
-# View Caddy/Traefik logs
-ansible pi-b -i ansible/inventories/prod/hosts.yml -m shell -a "sudo podman logs --tail 50 caddy"
+# View Traefik logs
+ansible pi-b -i ansible/inventories/prod/hosts.yml -m shell -a "sudo journalctl -u traefik --tail 50"
+
+# View Authentik logs
+ansible pi-d -i ansible/inventories/prod/hosts.yml -m shell -a "sudo podman logs --tail 50 authentik-server"
 ```
 
 ## 🔍 Monitoring & Metrics
@@ -104,8 +112,9 @@ Check target status at: http://192.168.1.12:9090/targets
 Current targets:
 - ✅ `node` job: 3/3 instances UP (all VMs)
 - ✅ `prometheus` job: 1/1 instance UP
-- ⚠️ `grafana` job: DOWN (localhost connection issue)
-- ⚠️ `loki` job: DOWN (localhost connection issue)
+- ✅ `grafana` job: 1/1 instance UP
+- ✅ `loki` job: 1/1 instance UP
+- ✅ `authentik` job: 1/1 instance UP
 
 ### Grafana Dashboards
 
@@ -218,7 +227,7 @@ ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo rsync -avz 
 
 ## 🔐 Security Notes
 
-- Internal services use HTTPS with Cloudflare Origin CA certificates (15-year validity)
+- Internal services use HTTPS with Let's Encrypt certificates (90-day auto-renewal)
 - Services are only accessible from local network (192.168.1.0/24)
 - No public internet access - DNS records are not proxied through Cloudflare
 - Firewall (UFW) is enabled on all Pis with strict ingress rules
@@ -229,10 +238,10 @@ ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo rsync -avz 
 ## 🌐 Cloudflare Integration
 
 ### Certificate Management
-- **Type**: Cloudflare Origin CA certificates
-- **Validity**: 15 years (expires 2040)
+- **Type**: Let's Encrypt with Cloudflare DNS-01 challenge
+- **Validity**: 90 days (auto-renewal ~30 days before expiry)
 - **Coverage**: `*.homelab.grenlan.com`, `homelab.grenlan.com`
-- **Location**: `/etc/ssl/cloudflare/` on pi-b
+- **Location**: `/etc/letsencrypt/live/homelab.grenlan.com/` on pi-b
 
 ### DNS Configuration
 ```bash
@@ -241,24 +250,26 @@ ansible pi-a -i ansible/inventories/prod/hosts.yml -m shell -a "sudo rsync -avz 
 192.168.1.11  grafana.homelab.grenlan.com
 192.168.1.11  prometheus.homelab.grenlan.com
 192.168.1.11  loki.homelab.grenlan.com
+192.168.1.11  auth.homelab.grenlan.com
 ```
 
 ### Certificate Setup
 ```bash
-# Generate new Origin certificate (if needed)
-cd ansible
-./scripts/setup-cloudflare-ca.sh
+# Check certificate status
+ssh pi@192.168.1.11 "sudo /opt/certbot-env/bin/certbot certificates"
 
-# Or deploy existing certificate
-ansible-playbook -i inventories/prod/hosts.yml \
-  playbooks/42-cloudflare-ca.yml \
-  -e "cloudflare_origin_cert='<cert-content>'"
+# Manual renewal test
+ssh pi@192.168.1.11 "sudo /opt/certbot-env/bin/certbot renew --dry-run"
+
+# View renewal timer status
+ssh pi@192.168.1.11 "sudo systemctl status certbot-renew.timer"
 ```
 
 ### Network Security
-- Services blocked from external access via Caddy rules
-- Only accessible from: 192.168.1.0/24, 10.0.0.0/8, 172.16.0.0/12
-- External requests receive 403 Forbidden
+- Services blocked from external access via Traefik rules
+- Only accessible from: 192.168.1.0/24 (internal network)
+- External requests blocked by firewall (UFW)
+- Authentication via Authentik for protected services
 
 ## 📝 Next Steps for Production
 

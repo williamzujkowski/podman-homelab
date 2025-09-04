@@ -1,8 +1,9 @@
 # Podman Homelab
 
-A **production-deployed** homelab infrastructure using Podman, Ansible, Cloudflare CA, and GitHub CI/CD for managing a Raspberry Pi cluster.
+A **production-deployed** homelab infrastructure using Podman, Ansible, Let's Encrypt, and GitHub CI/CD for managing a Raspberry Pi cluster with comprehensive authentication and monitoring.
 
-**Status:** ✅ **PRODUCTION** - All services operational on Raspberry Pi cluster
+**Status:** ✅ **PRODUCTION READY** - All core services operational with authentication framework deployed  
+**Authentication:** ⚠️ OAuth2 setup requires manual configuration (15-20 minutes)
 
 ## Overview
 
@@ -17,16 +18,16 @@ This repository implements a complete infrastructure-as-code solution for deploy
 - **SSH Redundancy**: Dual access paths via OpenSSH and Tailscale SSH
 - **Observability**: Prometheus, Grafana, Loki, and node_exporter
 - **Security**: Cloudflare Origin CA (15-year certs), UFW firewall, internal-only access
-- **Certificate Management**: Automated lifecycle with Cloudflare Origin CA
+- **Certificate Management**: Automated Let's Encrypt with Cloudflare DNS-01 challenge
 
 ### Production Infrastructure
 
-| Node | IP | Role | Services |
-|------|-----|------|----------|
-| **pi-a** | 192.168.1.12 | Monitoring/Canary | Prometheus, Grafana, Loki, Promtail |
-| **pi-b** | 192.168.1.11 | Ingress | Caddy with Cloudflare CA |
-| **pi-c** | 192.168.1.10 | Worker | Application services |
-| **pi-d** | 192.168.1.13 | Storage | MinIO, Backup services |
+| Node | IP | Role | Services | Status |
+|------|-----|------|----------|--------|
+| **pi-a** | 192.168.1.12 | Monitoring/Canary | Prometheus, Grafana, Loki, Promtail, Node Exporter | ✅ Operational |
+| **pi-b** | 192.168.1.11 | Ingress | Traefik with Let's Encrypt, Node Exporter | ✅ Operational |
+| **pi-c** | 192.168.1.10 | Worker | Node Exporter, Application services | ✅ Operational |
+| **pi-d** | 192.168.1.13 | Storage/Auth | PostgreSQL, Redis, Authentik, MinIO (ready), Node Exporter | ✅ Operational |
 
 ## Access Services
 
@@ -34,17 +35,22 @@ This repository implements a complete infrastructure-as-code solution for deploy
 - **Grafana**: http://192.168.1.12:3000 (admin/admin)
 - **Prometheus**: http://192.168.1.12:9090
 - **Loki**: http://192.168.1.12:3100
+- **Authentik**: http://192.168.1.13:9002 (akadmin/vault_password)
+- **Traefik Dashboard**: http://192.168.1.11:8080
+- **PostgreSQL**: 192.168.1.13:5432 (database services)
+- **Redis**: 192.168.1.13:6379 (cache and task queue)
 
-### HTTPS Access via Cloudflare CA
+### HTTPS Access via Let's Encrypt
 Add to `/etc/hosts`:
 ```
-192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com
+192.168.1.11  homelab.grenlan.com grafana.homelab.grenlan.com prometheus.homelab.grenlan.com loki.homelab.grenlan.com auth.homelab.grenlan.com
 ```
 
-Then access:
-- https://grafana.homelab.grenlan.com
-- https://prometheus.homelab.grenlan.com
-- https://loki.homelab.grenlan.com
+Then access (Browser-trusted ✅):
+- **Grafana**: https://grafana.homelab.grenlan.com (OAuth2 integration pending)
+- **Prometheus**: https://prometheus.homelab.grenlan.com (monitoring metrics)
+- **Loki**: https://loki.homelab.grenlan.com (log aggregation)  
+- **Authentik**: https://auth.homelab.grenlan.com (identity management)
 
 ## Quick Start
 
@@ -106,24 +112,34 @@ Then access:
 │   │   ├── podman/         # Container runtime setup
 │   │   ├── monitoring/     # Prometheus stack
 │   │   ├── logging/        # Loki + Promtail
-│   │   └── ingress/        # Caddy/Traefik
+│   │   ├── traefik/        # Traefik reverse proxy
+│   │   ├── postgresql/     # PostgreSQL database
+│   │   ├── authentik/      # Identity provider
+│   │   └── lldap/          # LDAP directory
 │   └── playbooks/
 │       ├── 00-bootstrap.yml
 │       ├── 10-base.yml
 │       ├── 20-podman.yml
 │       ├── 30-observability.yml
-│       └── 40-ingress.yml
-├── quadlet/                # Systemd container units
+│       ├── 40-ingress.yml
+│       ├── 50-authentik.yml
+│       ├── 52-grafana-oauth2.yml
+│       └── 60-grafana-dashboards.yml
+├── docs/                   # Comprehensive documentation
+│   ├── FINAL_DEPLOYMENT_REPORT.md
+│   ├── DEPLOYMENT_STATUS.md
+│   ├── OPERATIONAL_RUNBOOK.md
+│   └── services/           # Service-specific documentation
 ├── scripts/
-│   ├── preflight_time.sh  # Time sync verification
-│   ├── preflight_ssh.sh   # SSH redundancy check
-│   └── verify_services.sh # Service health checks
+│   ├── preflight_time.sh   # Time sync verification
+│   ├── preflight_ssh.sh    # SSH redundancy check
+│   ├── verify_services.sh  # Service health checks
+│   └── authentik-*         # OAuth2 configuration helpers
 ├── .github/workflows/
 │   ├── ci.yml             # Lint and test
 │   ├── deploy-staging.yml # VM deployment
 │   └── deploy-prod.yml    # Pi deployment
 └── renovate.json          # Dependency updates
-
 ```
 
 ## Deployment Pipeline
@@ -225,9 +241,36 @@ shellcheck scripts/*.sh
 
 MIT
 
+## Documentation
+
+### Quick Reference
+- **[FINAL_DEPLOYMENT_REPORT.md](docs/FINAL_DEPLOYMENT_REPORT.md)**: Comprehensive infrastructure status and configuration guide
+- **[DEPLOYMENT_STATUS.md](docs/DEPLOYMENT_STATUS.md)**: Current service status and access information  
+- **[OPERATIONAL_RUNBOOK.md](docs/operations/OPERATIONAL_RUNBOOK.md)**: Daily operations, troubleshooting, and maintenance procedures
+- **[CLAUDE.md](CLAUDE.md)**: Operational playbook and golden rules (MUST READ)
+
+### Service Documentation
+- **[OAuth2 Integration](docs/services/AUTHENTIK_OAUTH2_INTEGRATION_REPORT.md)**: Authentik and Grafana SSO setup
+- **[Cloudflare Integration](docs/services/CLOUDFLARE_INTEGRATION.md)**: Certificate and DNS configuration
+- **[Authentik Configuration](docs/services/AUTHENTIK_CONFIGURATION_REPORT.md)**: Identity provider setup
+
+### Next Steps
+1. **Complete OAuth2 Setup** (15-20 minutes):
+   ```bash
+   ./scripts/authentik-manual-config-guide.sh
+   ```
+2. **Test Authentication Flow**:
+   ```bash
+   python3 scripts/test-oauth2-flow.py
+   ```
+3. **Deploy Additional Services**: MinIO, LLDAP, custom applications
+
 ## Support
 
-For issues or questions, please open a GitHub issue.
+- **Repository**: Complete infrastructure-as-code with full documentation
+- **Issues**: Open GitHub Issues for bugs and feature requests  
+- **Security**: Use GitHub Security Advisories for security issues
+- **Operations**: Follow procedures in OPERATIONAL_RUNBOOK.md
 
 ---
 
