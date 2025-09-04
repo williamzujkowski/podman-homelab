@@ -1,0 +1,54 @@
+---
+- name: Create redis directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ redis_config_path }}"
+    - "{{ redis_data_path }}"
+
+- name: Create Redis configuration
+  template:
+    src: redis.conf.j2
+    dest: "{{ redis_config_path }}/redis.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart redis
+
+- name: Create systemd directory for containers
+  file:
+    path: /etc/containers/systemd
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy Redis quadlet
+  template:
+    src: redis.container.j2
+    dest: /etc/containers/systemd/redis.container
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart redis
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Start and enable Redis
+  systemd:
+    name: redis.service
+    state: started
+    enabled: yes
+
+- name: Wait for Redis to be ready
+  wait_for:
+    port: "{{ redis_port }}"
+    host: localhost
+    delay: 5
+    timeout: 30

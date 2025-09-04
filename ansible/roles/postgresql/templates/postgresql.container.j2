@@ -1,0 +1,46 @@
+[Unit]
+Description=PostgreSQL Database Server
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ postgres_image }}
+ContainerName={{ postgres_container_name }}
+
+# Network ports
+PublishPort={{ postgres_port }}:5432
+
+# Environment variables
+Environment=POSTGRES_PASSWORD={{ postgres_root_password }}
+Environment=POSTGRES_USER=postgres
+Environment=POSTGRES_DB=postgres
+Environment=POSTGRES_INITDB_ARGS="--encoding=UTF8 --locale=C"
+Environment=TZ={{ timezone | default('UTC') }}
+
+# Volumes
+Volume={{ postgres_data_dir }}/data:/var/lib/postgresql/data:Z
+Volume={{ postgres_data_dir }}/init-db.sql:/docker-entrypoint-initdb.d/init.sql:Z,ro
+
+# Health check
+HealthCmd=pg_isready -U postgres
+HealthInterval=30s
+HealthRetries=3
+HealthStartPeriod=60s
+HealthTimeout=5s
+
+# Resource limits
+PodmanArgs=--memory={{ postgres_memory_limit }} --cpus={{ postgres_cpu_limit }}
+
+# Labels for monitoring
+Label=io.containers.autoupdate=registry
+Label=prometheus.io/scrape=true
+Label=prometheus.io/port=9187
+Label=prometheus.io/path=/metrics
+
+[Service]
+Restart=always
+RestartSec=30
+TimeoutStopSec=70
+
+[Install]
+WantedBy=default.target

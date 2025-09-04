@@ -1,0 +1,122 @@
+---
+- name: Include OS-specific variables
+  include_vars: "{{ ansible_os_family }}.yml"
+  failed_when: false
+
+- name: Create authentik user
+  user:
+    name: authentik
+    uid: 1000
+    group: authentik
+    system: yes
+    shell: /usr/sbin/nologin
+    home: /var/lib/authentik
+    create_home: yes
+    state: present
+
+- name: Create authentik directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: authentik
+    group: authentik
+    mode: '0755'
+  loop:
+    - /etc/authentik
+    - /var/lib/authentik
+    - "{{ authentik_media_path }}"
+    - "{{ authentik_templates_path }}"
+    - "{{ authentik_geoip_path }}"
+
+- name: Create authentik network
+  containers.podman.podman_network:
+    name: "{{ authentik_network_name }}"
+    state: present
+
+- name: Generate authentik environment file
+  template:
+    src: authentik.env.j2
+    dest: /etc/authentik/authentik.env
+    owner: root
+    group: authentik
+    mode: '0640'
+  notify: restart authentik
+
+- name: Create systemd directory for containers
+  file:
+    path: /etc/containers/systemd
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy authentik server quadlet
+  template:
+    src: authentik-server.container.j2
+    dest: /etc/containers/systemd/authentik-server.container
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart authentik-server
+
+- name: Deploy authentik worker quadlet
+  template:
+    src: authentik-worker.container.j2
+    dest: /etc/containers/systemd/authentik-worker.container
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart authentik-worker
+
+- name: Create authentik healthcheck script
+  template:
+    src: check-authentik-health.sh.j2
+    dest: /usr/local/bin/check-authentik-health
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Start and enable authentik server
+  systemd:
+    name: authentik-server.service
+    state: started
+    enabled: yes
+
+- name: Start and enable authentik worker
+  systemd:
+    name: authentik-worker.service
+    state: started
+    enabled: yes
+
+- name: Wait for authentik to be ready
+  uri:
+    url: "http://localhost:{{ authentik_http_port }}/api/v3/root/config/"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 10
+
+- name: Create initial admin user (if bootstrap token provided)
+  uri:
+    url: "http://localhost:{{ authentik_http_port }}/api/v3/core/users/"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ authentik_bootstrap_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      username: "akadmin"
+      email: "{{ authentik_bootstrap_email }}"
+      name: "Authentik Admin"
+      is_active: true
+      is_superuser: true
+      groups: []
+      password: "{{ authentik_bootstrap_password }}"
+    status_code: [201, 400]  # 400 if user already exists
+  when: authentik_bootstrap_token != ''
+  ignore_errors: yes

@@ -1,0 +1,22 @@
+---
+# Redis default variables
+redis_version: "7.2-alpine"
+redis_container_name: "redis"
+redis_port: 6379
+redis_data_path: "/var/lib/redis"
+redis_config_path: "/etc/redis"
+
+# Resource limits
+redis_memory_limit: "256m"
+redis_cpu_limit: "0.5"
+
+# Redis configuration
+redis_maxmemory: "128mb"
+redis_maxmemory_policy: "allkeys-lru"
+redis_save_enabled: true
+redis_appendonly: "no"
+redis_protected_mode: "no"
+redis_bind: "0.0.0.0"
+
+# Network
+redis_network: "authentik"

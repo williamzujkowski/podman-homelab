@@ -1,0 +1,93 @@
+---
+- name: Configure Grafana OAuth2 with Authentik
+  hosts: pi-a  # Monitoring node where Grafana runs
+  become: yes
+  vars:
+    authentik_url: "https://auth.homelab.grenlan.com"
+    grafana_url: "https://grafana.homelab.grenlan.com"
+    
+  tasks:
+    - name: Update Grafana configuration for OAuth2
+      blockinfile:
+        path: /etc/grafana/grafana.ini
+        block: |
+          [auth]
+          disable_login_form = false
+          oauth_auto_login = false
+          
+          [auth.generic_oauth]
+          enabled = true
+          name = Authentik
+          icon = signin
+          client_id = {{ vault_grafana_oauth_client_id | default('grafana') }}
+          client_secret = {{ vault_grafana_oauth_client_secret | default('') }}
+          scopes = openid profile email
+          auth_url = {{ authentik_url }}/application/o/authorize/
+          token_url = {{ authentik_url }}/application/o/token/
+          api_url = {{ authentik_url }}/application/o/userinfo/
+          allowed_domains = homelab.grenlan.com
+          allow_sign_up = true
+          role_attribute_path = contains(groups, 'Grafana Admins') && 'Admin' || contains(groups, 'Grafana Editors') && 'Editor' || 'Viewer'
+          email_attribute_path = email
+          name_attribute_path = name
+          login_attribute_path = preferred_username
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - Authentik OAuth2"
+        create: no
+        backup: yes
+      notify: restart grafana
+    
+    - name: Create instructions for Authentik configuration
+      copy:
+        content: |
+          # Authentik Configuration for Grafana OAuth2
+          
+          1. Log into Authentik at {{ authentik_url }}
+          2. Navigate to Applications > Providers
+          3. Create a new OAuth2/OpenID Provider:
+             - Name: Grafana
+             - Authorization flow: default-provider-authorization-explicit-consent
+             - Client type: Confidential
+             - Client ID: grafana
+             - Client Secret: (generate and save to vault as vault_grafana_oauth_client_secret)
+             - Redirect URIs: {{ grafana_url }}/login/generic_oauth
+             - Signing Key: authentik Self-signed Certificate
+          
+          4. Create an Application:
+             - Name: Grafana
+             - Slug: grafana
+             - Provider: Grafana (the provider you just created)
+             - Launch URL: {{ grafana_url }}
+          
+          5. Create Groups:
+             - Grafana Admins
+             - Grafana Editors
+             - Grafana Viewers
+          
+          6. Assign users to appropriate groups
+          
+          7. Update the vault with:
+             - vault_grafana_oauth_client_id (if different from 'grafana')
+             - vault_grafana_oauth_client_secret (from step 3)
+          
+          8. Re-run this playbook after updating vault
+        dest: /etc/grafana/authentik-setup-instructions.txt
+        owner: root
+        group: grafana
+        mode: '0640'
+    
+    - name: Display setup instructions
+      debug:
+        msg:
+          - "IMPORTANT: Manual configuration required in Authentik!"
+          - "See /etc/grafana/authentik-setup-instructions.txt for details"
+          - ""
+          - "After configuring Authentik:"
+          - "1. Update vault with OAuth2 credentials"
+          - "2. Re-run this playbook"
+          - "3. Restart Grafana"
+    
+  handlers:
+    - name: restart grafana
+      systemd:
+        name: grafana-server
+        state: restarted

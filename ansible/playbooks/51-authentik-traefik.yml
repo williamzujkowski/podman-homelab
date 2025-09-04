@@ -1,0 +1,101 @@
+---
+- name: Configure Traefik for Authentik
+  hosts: pi-b  # Ingress node
+  become: yes
+  vars:
+    authentik_url: "http://192.168.1.13:9000"  # pi-d where Authentik runs
+    
+  tasks:
+    - name: Create Traefik dynamic configuration for Authentik
+      copy:
+        content: |
+          http:
+            routers:
+              authentik:
+                rule: "Host(`auth.homelab.grenlan.com`)"
+                service: authentik
+                tls:
+                  certResolver: letsencrypt
+                middlewares:
+                  - default-headers
+                  - https-redirect
+              
+              # Outpost router for forward auth
+              authentik-outpost:
+                rule: "Host(`auth.homelab.grenlan.com`) && PathPrefix(`/outpost.goauthentik.io/`)"
+                service: authentik
+                tls:
+                  certResolver: letsencrypt
+                priority: 100
+            
+            services:
+              authentik:
+                loadBalancer:
+                  servers:
+                    - url: "{{ authentik_url }}"
+                  healthCheck:
+                    path: /api/v3/root/config/
+                    interval: 30s
+                    timeout: 3s
+            
+            middlewares:
+              # ForwardAuth middleware for protected services
+              authentik-auth:
+                forwardAuth:
+                  address: "{{ authentik_url }}/outpost.goauthentik.io/auth/traefik"
+                  trustForwardHeader: true
+                  authResponseHeaders:
+                    - X-authentik-username
+                    - X-authentik-groups
+                    - X-authentik-email
+                    - X-authentik-name
+                    - X-authentik-uid
+                    - X-authentik-jwt
+                    - X-authentik-meta-jwks
+                    - X-authentik-meta-outpost
+                    - X-authentik-meta-provider
+                    - X-authentik-meta-app
+                    - X-authentik-meta-version
+              
+              default-headers:
+                headers:
+                  stsSeconds: 31536000
+                  stsIncludeSubdomains: true
+                  stsPreload: true
+                  forceSTSHeader: true
+                  contentTypeNosniff: true
+                  browserXssFilter: true
+                  referrerPolicy: "strict-origin-when-cross-origin"
+                  customFrameOptionsValue: "SAMEORIGIN"
+              
+              https-redirect:
+                redirectScheme:
+                  scheme: https
+                  permanent: true
+        dest: /etc/traefik/dynamic/authentik.yml
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart traefik
+    
+    - name: Ensure Traefik can reach Authentik
+      wait_for:
+        host: 192.168.1.13
+        port: 9000
+        timeout: 30
+        msg: "Cannot reach Authentik on pi-d"
+    
+    - name: Test Authentik API endpoint
+      uri:
+        url: "{{ authentik_url }}/api/v3/root/config/"
+        status_code: 200
+      register: authentik_test
+      until: authentik_test.status == 200
+      retries: 5
+      delay: 10
+    
+  handlers:
+    - name: restart traefik
+      systemd:
+        name: traefik
+        state: restarted

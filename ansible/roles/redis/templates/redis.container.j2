@@ -1,0 +1,26 @@
+[Unit]
+Description=Redis in-memory data structure store
+After=network-online.target
+
+[Container]
+Image=docker.io/library/redis:{{ redis_version }}
+ContainerName={{ redis_container_name }}
+Network={{ redis_network }}
+Volume={{ redis_data_path }}:/data:Z
+Volume={{ redis_config_path }}/redis.conf:/usr/local/etc/redis/redis.conf:ro,Z
+PublishPort={{ redis_port }}:6379
+PodmanArgs=--memory={{ redis_memory_limit }} --cpus={{ redis_cpu_limit }}
+HealthCmd=redis-cli ping || exit 1
+HealthInterval=10s
+HealthRetries=3
+HealthStartPeriod=20s
+HealthTimeout=3s
+Exec=redis-server /usr/local/etc/redis/redis.conf
+
+[Service]
+Restart=always
+RestartSec=30
+TimeoutStopSec=70
+
+[Install]
+WantedBy=default.target

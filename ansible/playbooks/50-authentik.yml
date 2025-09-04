@@ -1,0 +1,52 @@
+---
+- name: Deploy Authentik Identity Provider
+  hosts: pi-d  # Storage node for databases
+  become: yes
+  vars:
+    authentik_secret_key: "{{ lookup('password', '/dev/null length=50 chars=ascii_letters,digits') }}"
+    authentik_postgres_password: "{{ vault_authentik_db_password | default('AuthentikDB123!') }}"
+    authentik_redis_host: "localhost"
+    authentik_postgres_host: "localhost"
+    authentik_external_url: "https://auth.homelab.grenlan.com"
+    authentik_bootstrap_password: "{{ vault_authentik_admin_password | default('ChangeMe123!') }}"
+    authentik_bootstrap_email: "admin@homelab.grenlan.com"
+    
+  pre_tasks:
+    - name: Ensure Podman is installed
+      package:
+        name: podman
+        state: present
+    
+    - name: Create authentik network
+      containers.podman.podman_network:
+        name: authentik
+        state: present
+
+  roles:
+    - postgresql
+    - redis
+    - authentik
+
+  post_tasks:
+    - name: Display access information
+      debug:
+        msg:
+          - "Authentik has been deployed!"
+          - "Access at: {{ authentik_external_url }}"
+          - "Default username: akadmin"
+          - "Default password: {{ authentik_bootstrap_password }}"
+          - ""
+          - "Health check: sudo /usr/local/bin/check-authentik-health"
+          - ""
+          - "IMPORTANT: Change the default password after first login!"
+    
+    - name: Create firewall rules for Authentik
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+        comment: "Authentik {{ item }}"
+      loop:
+        - "{{ authentik_http_port | default(9000) }}"
+        - "{{ authentik_https_port | default(9443) }}"
+      when: ansible_facts['os_family'] == 'Debian'

@@ -1,0 +1,19 @@
+-- PostgreSQL initialization script
+-- Managed by Ansible
+
+-- Create Authentik database and user
+CREATE USER {{ postgres_authentik_user }} WITH PASSWORD '{{ postgres_authentik_password }}';
+CREATE DATABASE {{ postgres_authentik_db }} WITH OWNER {{ postgres_authentik_user }} ENCODING 'UTF8';
+GRANT ALL PRIVILEGES ON DATABASE {{ postgres_authentik_db }} TO {{ postgres_authentik_user }};
+
+-- Grant necessary extensions
+\c {{ postgres_authentik_db }};
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS btree_gin;
+
+-- Additional databases can be added here
+{% for db in postgres_additional_databases | default([]) %}
+CREATE USER {{ db.user }} WITH PASSWORD '{{ db.password }}';
+CREATE DATABASE {{ db.name }} WITH OWNER {{ db.user }} ENCODING 'UTF8';
+GRANT ALL PRIVILEGES ON DATABASE {{ db.name }} TO {{ db.user }};
+{% endfor %}

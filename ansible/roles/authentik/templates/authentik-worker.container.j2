@@ -1,0 +1,28 @@
+[Unit]
+Description=Authentik Background Worker
+After=network-online.target redis.service postgresql.service authentik-server.service
+Requires=redis.service postgresql.service
+
+[Container]
+Image=ghcr.io/goauthentik/server:{{ authentik_version }}
+ContainerName={{ authentik_worker_container_name }}
+Network={{ authentik_network_name }}
+EnvironmentFile=/etc/authentik/authentik.env
+Volume={{ authentik_media_path }}:/media:Z
+Volume={{ authentik_templates_path }}:/templates:Z
+Volume={{ authentik_geoip_path }}:/geoip:Z
+PodmanArgs=--memory={{ authentik_worker_memory_limit }} --cpus={{ authentik_worker_cpu_limit }}
+HealthCmd=/lifecycle/ak healthcheck
+HealthInterval=30s
+HealthRetries=3
+HealthStartPeriod=90s
+HealthTimeout=10s
+Exec=worker
+
+[Service]
+Restart=always
+RestartSec=30
+TimeoutStopSec=70
+
+[Install]
+WantedBy=default.target

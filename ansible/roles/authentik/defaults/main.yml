@@ -1,0 +1,60 @@
+---
+# Authentik default variables
+authentik_version: "2024.8.3"
+authentik_server_container_name: "authentik-server"
+authentik_worker_container_name: "authentik-worker"
+authentik_network_name: "authentik"
+
+# Database settings
+authentik_postgres_host: "{{ postgres_host | default('postgres') }}"
+authentik_postgres_port: "{{ postgres_port | default('5432') }}"
+authentik_postgres_db: "authentik"
+authentik_postgres_user: "authentik"
+authentik_postgres_password: "{{ vault_authentik_postgres_password | default('authentik-db-password') }}"
+
+# Redis settings
+authentik_redis_host: "{{ redis_host | default('redis') }}"
+authentik_redis_port: "{{ redis_port | default('6379') }}"
+
+# Authentik configuration
+authentik_secret_key: "{{ vault_authentik_secret_key | default('change-me-to-a-long-random-string') }}"
+authentik_error_reporting_enabled: false
+authentik_log_level: "info"
+
+# Email settings (optional)
+authentik_email_host: ""
+authentik_email_port: 587
+authentik_email_username: ""
+authentik_email_password: ""
+authentik_email_use_tls: true
+authentik_email_use_ssl: false
+authentik_email_from: "authentik@{{ ansible_hostname }}.local"
+
+# Ports
+authentik_http_port: 9000
+authentik_https_port: 9443
+authentik_metrics_port: 9300
+
+# Resource limits
+authentik_server_memory_limit: "1024m"
+authentik_server_cpu_limit: "1.0"
+authentik_worker_memory_limit: "512m"
+authentik_worker_cpu_limit: "0.5"
+
+# Storage paths
+authentik_media_path: "/var/lib/authentik/media"
+authentik_templates_path: "/var/lib/authentik/templates"
+authentik_geoip_path: "/var/lib/authentik/geoip"
+
+# External URL (important for OAuth2/SAML)
+authentik_external_url: "https://auth.{{ domain_name | default('homelab.grenlan.com') }}"
+
+# Initial admin setup
+authentik_bootstrap_password: "{{ vault_authentik_bootstrap_password | default('akadmin') }}"
+authentik_bootstrap_token: "{{ vault_authentik_bootstrap_token | default('') }}"
+authentik_bootstrap_email: "admin@{{ domain_name | default('homelab.grenlan.com') }}"
+
+# Features
+authentik_enable_blueprints: true
+authentik_enable_metrics: true
+authentik_enable_geoip: false

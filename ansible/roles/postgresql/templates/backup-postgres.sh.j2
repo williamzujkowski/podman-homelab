@@ -1,0 +1,21 @@
+#!/bin/bash
+# PostgreSQL backup script
+set -e
+
+BACKUP_DIR="{{ postgres_backup_dir }}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_FILE="$BACKUP_DIR/postgres_backup_$TIMESTAMP.sql"
+
+# Create backup directory if it doesn't exist
+mkdir -p "$BACKUP_DIR"
+
+# Dump all databases
+podman exec postgresql pg_dumpall -U postgres > "$BACKUP_FILE"
+
+# Compress the backup
+gzip "$BACKUP_FILE"
+
+# Keep only the last {{ postgres_backup_retention_days | default(7) }} days of backups
+find "$BACKUP_DIR" -name "postgres_backup_*.sql.gz" -mtime +{{ postgres_backup_retention_days | default(7) }} -delete
+
+echo "Backup completed: ${BACKUP_FILE}.gz"

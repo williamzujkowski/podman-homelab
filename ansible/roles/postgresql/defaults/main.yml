@@ -1,0 +1,44 @@
+---
+# PostgreSQL defaults
+postgres_version: "16-alpine"
+postgres_image: "docker.io/library/postgres:{{ postgres_version }}"
+postgres_container_name: "postgresql"
+
+# Network configuration
+postgres_port: 5432
+postgres_host: "{{ ansible_host }}"
+postgres_network: "authentik"
+
+# Database configuration
+postgres_root_password: "{{ vault_postgres_root_password | default('ChangeMe789!') }}"
+postgres_data_dir: "/var/lib/postgresql"
+
+# Resource limits
+postgres_memory_limit: "512m"
+postgres_cpu_limit: "1.0"
+
+# Databases to create
+postgres_databases:
+  - name: authentik
+    owner: authentik
+  - name: gitea
+    owner: gitea
+  - name: nextcloud
+    owner: nextcloud
+
+# Users to create
+postgres_users:
+  - name: authentik
+    password: "{{ vault_authentik_db_password | default('AuthentikDB123!') }}"
+    database: authentik
+  - name: gitea
+    password: "{{ vault_gitea_db_password | default('GiteaPass123!') }}"
+    database: gitea
+  - name: nextcloud
+    password: "{{ vault_nextcloud_db_password | default('NextcloudPass123!') }}"
+    database: nextcloud
+
+# Backup configuration
+postgres_backup_enabled: true
+postgres_backup_dir: "/backup/postgresql"
+postgres_backup_retention_days: 7
